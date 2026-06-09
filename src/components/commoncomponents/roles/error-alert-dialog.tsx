@@ -4,7 +4,6 @@ import Image from "next/image";
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -12,18 +11,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export function LogoutConfirmationDialog({
-  open,
-  onOpenChange,
-  onConfirm,
-}: {
+type ErrorAlertDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-}) {
+  title: string;
+  description: string;
+  actionText?: string;
+};
+
+export function ErrorAlertDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  actionText = "OK",
+}: ErrorAlertDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="w-[250px] max-w-[90vw] rounded-3xl border-0 bg-white p-4 shadow-xl">
+      <AlertDialogContent className="w-[360px] max-w-[90vw] rounded-3xl border-0 bg-white p-4 shadow-xl">
         <AlertDialogHeader className="text-center">
           <div className="flex justify-center">
             <Image
@@ -35,21 +40,18 @@ export function LogoutConfirmationDialog({
             />
           </div>
           <AlertDialogTitle className="text-center text-base font-semibold text-gray-900">
-            Logging Out
+            {title}
           </AlertDialogTitle>
           <AlertDialogDescription className="mt-[-5px] text-center text-xs text-gray-600">
-            Are you sure you want to log out?
+            {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row justify-center gap-2">
-          <AlertDialogCancel className="flex-1 rounded-md border border-indigo-600 px-1 py-1 text-xs text-indigo-600 hover:bg-indigo-50 !border-indigo-600 !text-indigo-600 hover:!bg-indigo-50">
-            No
-          </AlertDialogCancel>
+        <AlertDialogFooter className="justify-center">
           <AlertDialogAction
-            onClick={onConfirm}
-            className="flex-1 rounded-md bg-indigo-600 px-1 py-1 text-xs text-white hover:bg-indigo-700"
+            onClick={() => onOpenChange(false)}
+            className="w-full rounded-md bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
           >
-            Yes
+            {actionText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

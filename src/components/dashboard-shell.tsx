@@ -95,8 +95,8 @@ function SidebarBrand() {
       <Image
         src={collapsed ? "/sap.png" : "/saptarishi.png"}
         alt="Saptarishi Solutions"
-        width={collapsed ? 32 : 120}
-        height={collapsed ? 32 : 40}
+        width={collapsed ? 26 : 96}
+        height={collapsed ? 26 : 32}
         priority
         className="object-contain"
       />
@@ -379,7 +379,7 @@ export function DashboardShell({
             </button>
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto p-4">{children}</main>
+        <main className="flex-1 overflow-y-auto min-w-0">{children}</main>
       </SidebarInset>
       <LogoutConfirmationDialog
         open={logoutOpen}
