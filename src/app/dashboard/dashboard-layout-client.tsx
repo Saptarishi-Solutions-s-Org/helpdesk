@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import useSWR from "swr";
 import { toast } from "sonner";
+import useSWR from "swr";
 import {
   BellRing,
   Boxes,
@@ -17,8 +17,8 @@ import {
   Home,
   LogOut,
   Ticket,
-  Users,
 } from "lucide-react";
+import { LogoutConfirmationDialog } from "@/components/commoncomponents/logout-confirmation-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +26,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogoutConfirmationDialog } from "@/components/commoncomponents/logout-confirmation-dialog";
-import { cn } from "@/lib/utils";
-import { useRealtime } from "@/hooks/useRealtime";
 import {
   Sidebar,
   SidebarContent,
@@ -45,8 +42,26 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useRealtime } from "@/hooks/useRealtime";
+import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+type SessionPayload = {
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: "ADMIN" | "USER";
+  } | null;
+};
+
+type ProfilePayload = {
+  profile?: {
+    name?: string | null;
+    email?: string | null;
+  };
+};
 
 type NotificationRow = {
   id: string;
@@ -55,13 +70,6 @@ type NotificationRow = {
   link?: string | null;
   isRead: boolean;
   createdAt?: string;
-};
-
-type ProfilePayload = {
-  profile?: {
-    name?: string | null;
-    email?: string | null;
-  };
 };
 
 type NotificationRealtimePayload = {
@@ -82,7 +90,6 @@ const userLinks = [
 const adminLinks = [
   ...userLinks,
   { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
-  { href: "/dashboard/admin/users", label: "Users", icon: Users },
   { href: "/dashboard/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard/admin/modules", label: "Modules", icon: Boxes },
 ];
@@ -90,6 +97,7 @@ const adminLinks = [
 function SidebarBrand() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+
   return (
     <div className="flex h-12 items-center justify-center">
       <Image
@@ -109,19 +117,15 @@ function isSidebarHrefActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function DashboardShell({
-  user,
-  children,
-}: {
-  user: { id: string; name: string; email: string; role: "ADMIN" | "USER" };
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
   const notificationSeededRef = useRef(false);
-  const links = user.role === "ADMIN" ? adminLinks : userLinks;
+  const { data: sessionData } = useSWR<SessionPayload>("/api/auth/session", fetcher);
+  const user = sessionData?.user;
+  const links = user?.role === "ADMIN" ? adminLinks : userLinks;
   const { data, mutate } = useSWR("/api/notifications", fetcher, {
     refreshInterval: 5000,
   });
@@ -129,14 +133,15 @@ export function DashboardShell({
     "/api/profile",
     fetcher,
   );
-  const displayName = profileData?.profile?.name || user.name;
+  const displayName = profileData?.profile?.name || user?.name || "SRS Helpdesk";
+
   useRealtime(["notifications"], (payload) => {
     void mutate();
 
     const notificationPayload = payload as NotificationRealtimePayload;
     const row = notificationPayload.new;
     if (notificationPayload.eventType !== "INSERT") return;
-    if (!row || row.recipient_id !== user.id) return;
+    if (!row || row.recipient_id !== user?.id) return;
 
     toast.info(row.title || "New notification", {
       description: row.message,
@@ -149,6 +154,7 @@ export function DashboardShell({
         : undefined,
     });
   });
+
   useRealtime(["users"], () => {
     void mutateProfile();
   });
@@ -257,7 +263,7 @@ export function DashboardShell({
             <SidebarTrigger />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-700">
-                {displayName}
+                SRS-Help Desk
               </p>
             </div>
           </div>
@@ -315,14 +321,6 @@ export function DashboardShell({
                             <p className="whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">
                               {note.message}
                             </p>
-                            {note.createdAt && (
-                              <p className="mt-1 text-[11px] text-slate-500">
-                                {new Date(note.createdAt).toLocaleString("en-IN", {
-                                  dateStyle: "medium",
-                                  timeStyle: "short",
-                                })}
-                              </p>
-                            )}
                           </div>
                           <div className="flex shrink-0 flex-col items-center gap-2">
                             {!note.isRead && (

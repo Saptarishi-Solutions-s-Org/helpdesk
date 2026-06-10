@@ -6,6 +6,7 @@ import { roles, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const SESSION_COOKIE = "srs_helpdesk_session";
+const SESSION_MAX_AGE = 60 * 60 * 24 * 4;
 const secret = new TextEncoder().encode(
   process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "dev-helpdesk-secret",
 );
@@ -30,7 +31,7 @@ export async function createSession(user: SessionUser) {
   const token = await new SignJWT(user)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("1d")
+    .setExpirationTime("4d")
     .sign(secret);
 
   const cookieStore = await cookies();
@@ -39,8 +40,12 @@ export async function createSession(user: SessionUser) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24,
+    maxAge: SESSION_MAX_AGE,
   });
+}
+
+export async function refreshSession(user: SessionUser) {
+  await createSession(user);
 }
 
 export async function clearSession() {

@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+export const organizationSchema = z.object({
+  name: z.string().trim().min(2, "Organization name is required."),
+  contactEmail: z
+    .string()
+    .trim()
+    .email("Enter a valid email.")
+    .optional()
+    .or(z.literal("")),
+  contactPhone: z.string().trim().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+});
+
+export const userSchema = z.object({
+  organizationId: z.string().uuid("Organization is required."),
+  name: z.string().trim().min(2, "Name is required."),
+  email: z.string().trim().email("Enter a valid email."),
+  phone: z.string().trim().optional(),
+  designation: z.string().trim().optional(),
+});
+
 export const projectSchema = z.object({
   name: z.string().trim().min(2, "Project name is required."),
   code: z
