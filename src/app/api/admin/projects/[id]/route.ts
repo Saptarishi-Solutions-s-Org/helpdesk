@@ -1,5 +1,5 @@
 import { eq, or, sql } from "drizzle-orm";
-import { issues, modules, projects } from "@/db/schema";
+import { issues, modules, organizationProjects, projects } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -24,6 +24,7 @@ export async function PUT(req: Request, context: RouteContext) {
       .update(projects)
       .set({
         name: parsed.data.name,
+        shortCode: parsed.data.shortCode,
         description: parsed.data.description || null,
         updatedAt: new Date(),
       })
@@ -46,16 +47,22 @@ export async function DELETE(_req: Request, context: RouteContext) {
       .select({
         moduleCount: sql<number>`count(distinct ${modules.id})::int`,
         issueCount: sql<number>`count(distinct ${issues.id})::int`,
+        organizationCount: sql<number>`count(distinct ${organizationProjects.id})::int`,
       })
       .from(projects)
       .leftJoin(modules, eq(modules.projectId, projects.id))
+      .leftJoin(organizationProjects, eq(organizationProjects.projectId, projects.id))
       .leftJoin(
         issues,
         or(eq(issues.projectId, projects.id), eq(issues.moduleId, modules.id)),
       )
       .where(eq(projects.id, id));
 
-    if ((association?.moduleCount ?? 0) > 0 || (association?.issueCount ?? 0) > 0) {
+    if (
+      (association?.moduleCount ?? 0) > 0 ||
+      (association?.issueCount ?? 0) > 0 ||
+      (association?.organizationCount ?? 0) > 0
+    ) {
       return ok({ message: "PROJECT_IN_USE" }, 409);
     }
 

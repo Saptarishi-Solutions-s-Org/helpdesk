@@ -16,7 +16,7 @@ async function nextProjectCode() {
     .where(ilike(projects.code, "SRSHD%"))
     .orderBy(desc(projects.code))
     .limit(1);
-  const lastNumber = Number(latest?.code?.replace(/\D/g, "") || "0");
+  const lastNumber = Number(latest?.code?.replace(/D/g, "") || "0");
   return `SRSHD${String(lastNumber + 1).padStart(3, "0")}`;
 }
 
@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       ? or(
           ilike(projects.name, `%${search}%`),
           ilike(projects.code, `%${search}%`),
+          ilike(projects.shortCode, `%${search}%`),
           ilike(projects.description, `%${search}%`),
         )
       : undefined;
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
       .values({
         name: parsed.data.name,
         code: await nextProjectCode(),
+        shortCode: parsed.data.shortCode,
         description: parsed.data.description || null,
       })
       .returning();

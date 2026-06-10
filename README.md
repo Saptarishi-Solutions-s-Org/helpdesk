@@ -5,19 +5,19 @@ SRS Helpdesk is a Next.js support application for Saptarishi-style client suppor
 The application is designed around two roles:
 
 - `ADMIN`: SRS/internal support user. Admins can see all organizations, configure support routing, triage issues, change statuses, and manage organizations/users/projects/modules.
-- `USER`: Client organization user. Users can see issue activity for their own organization, raise new issues, update ticket details, add comments, reopen closed/resolved tickets, and collaborate on organization tickets.
+- `CLIENT`: Client organization user. Clients can see issue activity for their own organization, raise new issues, update ticket details, add comments, reopen closed/resolved tickets, and collaborate on organization tickets.
 
 ## How The System Works
 
 ### Login And Account Flow
 
-Users authenticate with email and password. The app stores a signed session cookie named `srs_helpdesk_session`; proxy routing protects dashboard pages and redirects logged-in users away from auth pages.
+Clients authenticate with email and password. The app stores a signed session cookie named `srs_helpdesk_session`; proxy routing protects dashboard pages and redirects logged-in users away from auth pages.
 
 Account emails are sent only through Microsoft Graph mailer:
 
-- Admin creates a user and the user receives a set-password link.
-- User can request forgot-password email.
-- User can reset password from the reset-password link.
+- Admin creates a client and the client receives a set-password link.
+- Client can request forgot-password email.
+- Client can reset password from the reset-password link.
 
 Issue updates do not send emails. They create in-app notifications only.
 
@@ -26,24 +26,28 @@ Issue updates do not send emails. They create in-app notifications only.
 An organization represents a client company using SRS support.
 
 - Organization codes are generated as `SHDORG001`, `SHDORG002`, etc.
+- Organizations also have a required 2-3 character `shortCode` used in ticket numbers.
+- Organization detail pages can link one or more active projects to the organization.
 - New organizations are active by default.
 - Organization detail pages use the organization code in the URL.
 - Inactive organizations cascade users to inactive when the organization is disabled.
 - Empty optional values are shown as `Not provided`.
 
-### Users
+### Clients
 
-Users belong to an organization and role.
+Clients belong to an organization and role.
 
-- Admin-created organization users are created as `USER` by default.
-- Users are managed from the organization detail flow, not from a separate sidebar page.
-- Users in an inactive organization cannot be treated as active support users.
+- Admin-created organization clients are created as `CLIENT` by default.
+- Clients are managed from the organization detail flow, not from a separate sidebar page.
+- Clients in an inactive organization cannot be treated as active support users.
 
 ### Projects And Modules
 
 Projects and modules are configured routing values. They are not free-text fields during triage.
 
 - Projects have generated codes like `SRSHD001`.
+- Projects also have a required 2-3 character `shortCode` used in ticket numbers. `PEN` is reserved for pending project assignment.
+- Projects must be linked to organizations before client tickets can be created or triaged against them.
 - Modules have generated codes like `SRSHDM001`.
 - Modules belong to projects.
 - Delete actions check associations before deleting.
@@ -51,34 +55,33 @@ Projects and modules are configured routing values. They are not free-text field
 
 ### Issues
 
-Users raise issues from the Issues page. At creation time, the user only provides:
+Clients raise issues from the Issues page. At creation time, the user only provides:
 
 - Title
 - Rich description
 - Optional attachment link and label
 
-The user does not decide issue type or priority. Admin decides those during triage.
+The client does not decide issue type or priority. Admin decides those during triage.
 
-Issue ticket numbers are generated server-side with a future-proof sequence:
+Issue ticket numbers are generated server-side from organization and project short codes:
 
 ```text
-SRS-HD-000001
-SRS-HD-000002
-SRS-HD-999999
-SRS-HD-1000000
-SRS-HD-1000001
+SHD-ORG-PRJ-1
+SHD-ORG-PRJ-2
+SHD-ORG-PEN-1
+SHD-ORG-PRJ-1000000
 ```
 
-The six digits are minimum padding, not a maximum limit.
+The numeric suffix is not padded and has no fixed upper limit. Sequences are scoped per organization + project segment. If an organization has exactly one linked active project, the issue is assigned to that project immediately. If an organization has multiple linked projects, the ticket uses the stable pending segment `PEN` until Admin triages it; the ticket number is not renamed. If no project is linked, issue creation is blocked with a contact-admin message.
 
-### User Issue Scope
+### Client Issue Scope
 
-For users, both Overview and Issues are organization-scoped.
+For clients, both Overview and Issues are organization-scoped.
 
-- User Overview shows stats for all issues raised by the user's organization.
-- User Issues page shows all issues raised by the user's organization.
-- Users can open, comment, update details, add/remove ticket attachments, and reopen tickets from their organization.
-- Comment deletion is self-only: a user can delete only their own comment.
+- Client Overview shows stats for all issues raised by the user's organization.
+- Client Issues page shows all issues raised by the user's organization.
+- Clients can open, comment, update details, add/remove ticket attachments, and reopen tickets from their organization.
+- Comment deletion is self-only: a client can delete only their own comment.
 
 ### Admin Issue Scope
 
@@ -94,7 +97,7 @@ Admins can:
 - Comment.
 - View complete activity and status history.
 
-Admins do not use the user ticket-detail edit flow for changing user descriptions.
+Admins do not use the client ticket-detail edit flow for changing user descriptions.
 
 ### Issue Statuses
 
@@ -159,7 +162,7 @@ Notifications appear in the dashboard header menu and show realtime toasts for t
 ### Dashboard
 
 - `/dashboard` - Overview summary.
-- `/dashboard/issues` - Organization issues for users; all issues for admins.
+- `/dashboard/issues` - Organization issues for clients; all issues for admins.
 - `/dashboard/issues/[ticketNo]` - Issue detail by ticket number.
 - `/dashboard/profile` - Profile and password settings.
 
@@ -167,7 +170,7 @@ Notifications appear in the dashboard header menu and show realtime toasts for t
 
 - `/dashboard/admin/organizations` - Organization cards.
 - `/dashboard/admin/organizations/[code]` - Organization detail by organization code.
-- `/dashboard/admin/organizations/[code]/users` - Organization user management.
+- `/dashboard/admin/organizations/[code]/users` - Organization client management.
 - `/dashboard/admin/projects` - Project configuration.
 - `/dashboard/admin/modules` - Module configuration.
 - `/dashboard/admin/roles` - Role reference page.
@@ -190,6 +193,8 @@ Notifications appear in the dashboard header menu and show realtime toasts for t
 
 - `/api/admin/organizations`
 - `/api/admin/organizations/[id]`
+- `/api/admin/organizations/[id]/projects`
+- `/api/admin/organizations/[id]/projects/[projectId]`
 - `/api/admin/users`
 - `/api/admin/roles`
 - `/api/admin/projects`
@@ -228,10 +233,11 @@ Core tables:
 - `organizations`
 - `roles`
 - `users`
-- `organizations`
 - `set_password_tokens`
 - `password_reset_tokens`
 - `projects`
+- `organization_projects`
+- `ticket_sequences`
 - `modules`
 - `issues`
 - `issue_attachments`
@@ -244,6 +250,8 @@ Important relations:
 
 - Users belong to roles.
 - Client users belong to organizations.
+- Organizations link to one or more projects through `organization_projects`.
+- Ticket numbering state is stored in `ticket_sequences`.
 - Modules belong to projects.
 - Issues belong to organizations and reporters.
 - Issues may be assigned to project/module after Admin triage.
@@ -260,6 +268,9 @@ Supabase Realtime should be enabled for tables that drive live UI updates:
 - `issue_status_history`
 - `issue_activity`
 - `users`
+- `organizations`
+- `projects`
+- `organization_projects`
 
 The UI also uses SWR refresh intervals as a backup.
 
@@ -307,13 +318,14 @@ npm run build
 
 - Admin can create organizations.
 - Organization detail opens by organization code.
-- Admin can create organization users.
+- Admin can create organization clients.
+- Admin can link projects to organizations.
 - Invite and password reset emails use Microsoft Graph.
-- Users can log in and see organization-wide overview and issue lists.
-- Users can raise tickets with rich text and optional link attachments.
+- Clients can log in and see organization-wide overview and issue lists.
+- Clients can raise tickets with rich text and optional link attachments.
 - Admin can triage type, priority, project, and module.
 - Admin can change status.
-- Users can comment and update organization tickets.
+- Clients can comment and update organization tickets.
 - Closed/resolved tickets can be reopened.
 - Comment deletion is self-only.
 - Ticket edits, comments, deletes, attachment changes, reopen, and status changes are tracked.

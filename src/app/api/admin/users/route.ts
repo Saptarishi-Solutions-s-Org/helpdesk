@@ -95,7 +95,7 @@ export async function PATCH(req: Request) {
       .where(eq(users.id, parsed.data.id))
       .limit(1);
 
-    if (!existing) return ok({ message: "User not found" }, 404);
+    if (!existing) return ok({ message: "Client not found" }, 404);
 
     const [duplicateEmail] = await db
       .select({ id: users.id })
@@ -139,11 +139,11 @@ export async function POST(req: Request) {
     const [userRole] = await db
       .select({ id: roles.id })
       .from(roles)
-      .where(eq(roles.roleName, "USER"))
+      .where(eq(roles.roleName, "CLIENT"))
       .limit(1);
 
     if (!userRole) {
-      return ok({ message: "USER role is not configured" }, 400);
+      return ok({ message: "CLIENT role is not configured" }, 400);
     }
 
     const token = crypto.randomBytes(32).toString("hex");

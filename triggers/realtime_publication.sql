@@ -4,3 +4,7 @@ alter publication supabase_realtime add table public.issue_attachments;
 alter publication supabase_realtime add table public.issue_status_history;
 alter publication supabase_realtime add table public.issue_activity;
 alter publication supabase_realtime add table public.notifications;
+alter publication supabase_realtime add table public.organizations;
+alter publication supabase_realtime add table public.projects;
+alter publication supabase_realtime add table public.users;
+alter publication supabase_realtime add table public.organization_projects;

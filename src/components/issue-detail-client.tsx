@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { CalendarClock, ExternalLink, Pencil, Paperclip, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { ExternalLink, Pencil, Paperclip, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import GlobalLoader from "@/components/commoncomponents/globalloader";
 import { RichEditor } from "@/components/rich-editor";
@@ -51,6 +51,7 @@ type Issue = {
   type: string | null;
   priority: string | null;
   status: string;
+  organizationId: string;
   organizationName: string;
   reporterName: string;
   projectId: string | null;
@@ -152,17 +153,17 @@ function renderCommentBody(body: string, mentions: Array<{ id: string; name: str
   }, body);
 }
 
-export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "USER" }) {
+export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "CLIENT" }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") === "history" ? "history" : "comments";
   const { data, mutate } = useSWR(`/api/issues/${id}`, fetcher, { refreshInterval: 15000 });
   const { data: mentionData } = useSWR(data?.issue?.id ? `/api/issues/${data.issue.id}/mentions` : null, fetcher);
-  const { data: projectData } = useSWR(role === "ADMIN" ? "/api/admin/projects" : null, fetcher);
+  const { data: projectData } = useSWR(role === "ADMIN" && data?.issue?.organizationId ? `/api/admin/organizations/${data.issue.organizationId}/projects` : null, fetcher);
   const { data: moduleData } = useSWR(role === "ADMIN" ? "/api/admin/modules" : null, fetcher);
   const issue: Issue | undefined = data?.issue;
-  const viewer = data?.viewer as { id: string; role: "ADMIN" | "USER" } | undefined;
+  const viewer = data?.viewer as { id: string; role: "ADMIN" | "CLIENT" } | undefined;
   const [statusDraft, setStatusDraft] = useState<{ issueStatus: string; value: string } | null>(null);
   const [projectId, setProjectId] = useState("");
   const [moduleId, setModuleId] = useState("");
@@ -197,6 +198,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
   const selectedPriority = priority || currentIssue.priority || "";
   const attachments: AttachmentRow[] = data.attachments ?? [];
   const activities: ActivityRow[] = data.activity ?? [];
+  const projectOptions: OptionRow[] = projectData?.linkedProjects ?? [];
   const modules = (moduleData?.modules ?? []).filter((item: OptionRow) => !selectedProjectId || item.projectId === selectedProjectId);
   const hasTriageChanges =
     selectedProjectId !== (currentIssue.projectId || "") ||
@@ -393,9 +395,9 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
   }
 
   return (
-    <main className="min-h-full bg-white p-6">
-      <div className="space-y-4">
-        <section className="rounded-lg border bg-white p-4 shadow-sm">
+    <main className="min-h-full min-w-0 overflow-x-hidden bg-white p-4 sm:p-6">
+      <div className="min-w-0 space-y-4">
+        <section className="min-w-0 rounded-lg border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -411,16 +413,11 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 <span>{currentIssue.organizationName}</span>
                 <span>-</span>
                 <span>Raised by {currentIssue.reporterName}</span>
-                <span>-</span>
-                <CalendarClock className="h-4 w-4" />
-                <span>{toIST(currentIssue.createdAt)}</span>
-                <span>-</span>
-                <span>Updated {toIST(currentIssue.updatedAt)}</span>
               </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {role === "USER" ? (
+              {role === "CLIENT" ? (
                 <Button variant="outline" size="sm" onClick={openEdit}>
                   <Pencil className="h-4 w-4" />
                   Edit
@@ -465,7 +462,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 <Label required className="mb-1">Project</Label>
                 <Select value={selectedProjectId} onValueChange={(value) => { setProjectId(value); setModuleId(""); }}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select project" /></SelectTrigger>
-                  <SelectContent>{(projectData?.projects ?? []).map((project: OptionRow) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{projectOptions.map((project: OptionRow) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -484,13 +481,13 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
           </section>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="p-5">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-4">
+            <Card className="min-w-0 overflow-hidden">
+              <CardContent className="min-w-0 p-5">
                 <h2 className="mb-3 text-base font-semibold text-gray-900">Description</h2>
                 <div
-                  className="prose prose-sm max-w-none text-sm leading-6 text-gray-700 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
+                  className="prose prose-sm max-w-none overflow-hidden break-words text-sm leading-6 text-gray-700 [&_*]:max-w-full [&_*]:break-words [overflow-wrap:anywhere] [&_*]:[overflow-wrap:anywhere] [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
                   dangerouslySetInnerHTML={{ __html: currentIssue.description }}
                 />
               </CardContent>
@@ -513,11 +510,12 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
             ) : null}
           </div>
 
-          <aside className="space-y-4">
-            <Card>
-              <CardContent className="grid gap-4 p-5">
+          <aside className="min-w-0 space-y-4">
+            <Card className="min-w-0 overflow-hidden">
+              <CardContent className="grid min-w-0 gap-4 p-5">
                 <FieldValue label="Project" value={currentIssue.projectName} />
                 <FieldValue label="Module" value={currentIssue.moduleName} />
+                <FieldValue label="Created" value={toIST(currentIssue.createdAt)} />
                 <FieldValue label="Last Updated" value={toIST(currentIssue.updatedAt)} />
               </CardContent>
             </Card>
@@ -564,7 +562,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                         </span>
                       </div>
                       <div
-                        className="mt-2 text-sm leading-6 [&_.mention-badge]:inline-flex [&_.mention-badge]:rounded-full [&_.mention-badge]:border [&_.mention-badge]:border-blue-100 [&_.mention-badge]:bg-blue-50 [&_.mention-badge]:px-2 [&_.mention-badge]:py-0.5 [&_.mention-badge]:font-medium [&_.mention-badge]:text-blue-700 [&_.mention-badge]:no-underline [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
+                        className="mt-2 max-w-full overflow-hidden break-words text-sm leading-6 [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_*]:[overflow-wrap:anywhere] [&_.mention-badge]:inline-flex [&_.mention-badge]:rounded-full [&_.mention-badge]:border [&_.mention-badge]:border-blue-100 [&_.mention-badge]:bg-blue-50 [&_.mention-badge]:px-2 [&_.mention-badge]:py-0.5 [&_.mention-badge]:font-medium [&_.mention-badge]:text-blue-700 [&_.mention-badge]:no-underline [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
                         dangerouslySetInnerHTML={{ __html: renderCommentBody(item.body, mentions) }}
                       />
                       {attachment ? (

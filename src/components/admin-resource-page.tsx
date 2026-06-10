@@ -94,7 +94,7 @@ export function UsersAdminPage() {
       body: JSON.stringify(Object.fromEntries(form.entries())),
     });
     if (!res.ok) return toast.error("Unable to create user");
-    toast.success("User created and set-password email sent");
+    toast.success("Client created and set-password email sent");
     event.currentTarget.reset();
     mutate();
   }
@@ -102,7 +102,7 @@ export function UsersAdminPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
       <Card>
-        <CardHeader><CardTitle>Create User</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Create Client</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-3">
             <div className="space-y-2"><Label>Name</Label><Input name="name" required /></div>

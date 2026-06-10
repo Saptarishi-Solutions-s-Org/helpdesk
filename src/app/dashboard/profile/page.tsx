@@ -155,7 +155,7 @@ export default function ProfilePage() {
                 </Badge>
               </div>
               <p className="mb-2 text-sm font-medium text-gray-600">
-                {profile.designation || "SRS Helpdesk User"}
+                {profile.designation || "SRS Helpdesk Client"}
               </p>
               <a
                 href={`mailto:${profile.email}`}

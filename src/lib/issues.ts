@@ -1,3 +1,9 @@
+import { sql } from "drizzle-orm";
+import { ticketSequences } from "@/db/schema";
+import type { db as drizzleDb } from "@/lib/db";
+
+export const PENDING_PROJECT_SEGMENT = "PEN";
+
 export const openStatuses = [
   "OPEN",
   "TRIAGED",
@@ -10,13 +16,38 @@ export function isClosedStatus(status: string) {
   return status === "CLOSED" || status === "RESOLVED" || status === "CANCELLED";
 }
 
-export async function nextTicketNo(getLastTicketNo: () => Promise<string | null>) {
-  const prefix = "SRS-HD";
-  const lastTicketNo = await getLastTicketNo();
-  const lastNumber = lastTicketNo?.startsWith(`${prefix}-`)
-    ? Number(lastTicketNo.slice(prefix.length + 1))
-    : 0;
-  const nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
+export function buildTicketNo(orgShortCode: string, projectSegment: string, number: number) {
+  return `SHD-${orgShortCode.toUpperCase()}-${projectSegment.toUpperCase()}-${number}`;
+}
 
-  return `${prefix}-${String(nextNumber).padStart(6, "0")}`;
+type TicketSequenceTx = Pick<typeof drizzleDb, "insert">;
+
+export async function nextTicketNo(
+  tx: TicketSequenceTx,
+  scope: {
+    organizationId: string;
+    projectId: string | null;
+    orgShortCode: string;
+    projectSegment: string;
+  },
+) {
+  const [sequence] = await tx
+    .insert(ticketSequences)
+    .values({
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      projectSegment: scope.projectSegment,
+      lastNumber: 1,
+    })
+    .onConflictDoUpdate({
+      target: [ticketSequences.organizationId, ticketSequences.projectSegment],
+      set: {
+        lastNumber: sql`${ticketSequences.lastNumber} + 1`,
+        projectId: scope.projectId,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ lastNumber: ticketSequences.lastNumber });
+
+  return buildTicketNo(scope.orgShortCode, scope.projectSegment, sequence.lastNumber);
 }

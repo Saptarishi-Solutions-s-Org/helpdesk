@@ -53,6 +53,7 @@ type ProjectRow = {
   id: string;
   name: string;
   code: string;
+  shortCode: string;
   description: string | null;
   isActive: boolean;
 };
@@ -83,10 +84,12 @@ export default function ProjectsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editing, setEditing] = useState<ProjectRow | null>(null);
   const [name, setName] = useState("");
+  const [shortCode, setShortCode] = useState("");
   const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [initialState, setInitialState] = useState({
     name: "",
+    shortCode: "",
     description: "",
   });
 
@@ -117,14 +120,16 @@ export default function ProjectsPage() {
   const hasChanges =
     !editing ||
     name !== initialState.name ||
+    shortCode !== initialState.shortCode ||
     description !== initialState.description;
 
   const resetForm = () => {
     setName("");
+    setShortCode("");
     setDescription("");
     setErrors({});
     setEditing(null);
-    setInitialState({ name: "", description: "" });
+    setInitialState({ name: "", shortCode: "", description: "" });
   };
 
   const openEditor = (project?: ProjectRow) => {
@@ -136,9 +141,11 @@ export default function ProjectsPage() {
 
     setEditing(project);
     setName(project.name);
+    setShortCode(project.shortCode);
     setDescription(project.description ?? "");
     setInitialState({
       name: project.name,
+      shortCode: project.shortCode,
       description: project.description ?? "",
     });
     setErrors({});
@@ -146,7 +153,7 @@ export default function ProjectsPage() {
   };
 
   const handleSubmit = () => {
-    const parsed = projectSchema.safeParse({ name, description });
+    const parsed = projectSchema.safeParse({ name, shortCode, description });
     if (!parsed.success) {
       const fieldErrors: FieldErrors = {};
       parsed.error.issues.forEach((issue) => {
@@ -168,7 +175,7 @@ export default function ProjectsPage() {
         {
           method: editing ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, description }),
+          body: JSON.stringify({ name, shortCode, description }),
         },
       );
       const result = await res.json().catch(() => ({}));
@@ -267,6 +274,9 @@ export default function ProjectsPage() {
                 Code
               </TableHead>
               <TableHead className="whitespace-nowrap text-xs sm:text-sm">
+                Short Code
+              </TableHead>
+              <TableHead className="whitespace-nowrap text-xs sm:text-sm">
                 Description
               </TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -274,9 +284,9 @@ export default function ProjectsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableStateRow colSpan={5} type="loading" />
+              <TableStateRow colSpan={6} type="loading" />
             ) : rows.length === 0 ? (
-              <TableStateRow colSpan={5} type="empty" />
+              <TableStateRow colSpan={6} type="empty" />
             ) : (
               rows.map((project, index) => (
                 <TableRow key={project.id}>
@@ -288,6 +298,9 @@ export default function ProjectsPage() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-gray-600 sm:text-sm">
                     {project.code}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs font-semibold text-gray-700 sm:text-sm">
+                    {project.shortCode}
                   </TableCell>
                   <TableCell
                     title={project.description || undefined}
@@ -372,6 +385,26 @@ export default function ProjectsPage() {
               )}
             </div>
             <div className="space-y-1">
+              <Label required className="mb-1">Short Code</Label>
+              <Input
+                placeholder="2-3 characters, e.g. CRM"
+                value={shortCode}
+                maxLength={3}
+                onChange={(event) => {
+                  setShortCode(event.target.value.toUpperCase());
+                  setErrors((prev) => ({ ...prev, shortCode: "" }));
+                }}
+                className={
+                  errors.shortCode
+                    ? "border-red-500 focus-visible:ring-red-500"
+                    : ""
+                }
+              />
+              {errors.shortCode && (
+                <p className="text-sm text-red-500">{errors.shortCode}</p>
+              )}
+            </div>
+            <div className="space-y-1">
               <Label className="mb-1">Project Code</Label>
               <Input
                 disabled
@@ -394,6 +427,7 @@ export default function ProjectsPage() {
               disabled={
                 isSubmitting ||
                 !name.trim() ||
+                !shortCode.trim() ||
                 (editing ? !hasChanges : false)
               }
               className="bg-blue-500 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -430,7 +464,7 @@ export default function ProjectsPage() {
         open={errorOpen}
         onOpenChange={setErrorOpen}
         title="Cannot Delete Project"
-        description="This project is assigned to modules or issues."
+        description="This project is assigned to organizations, modules, or issues."
       />
     </main>
   );

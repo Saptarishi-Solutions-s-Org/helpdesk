@@ -23,7 +23,7 @@ export async function DELETE(
     const { id, commentId } = await context.params;
     const issue = (await db.select().from(issues).where(issueLookupFor(id)).limit(1))[0];
     if (!issue) return ok({ message: "Not found" }, 404);
-    if (session.role === "USER" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
+    if (session.role === "CLIENT" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const comment = (await db.select().from(issueComments).where(eq(issueComments.id, commentId)).limit(1))[0];
     if (!comment || comment.issueId !== issue.id) return ok({ message: "Comment not found" }, 404);

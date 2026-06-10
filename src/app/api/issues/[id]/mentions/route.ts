@@ -18,7 +18,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     const { id } = await context.params;
     const issue = (await db.select().from(issues).where(issueLookupFor(id)).limit(1))[0];
     if (!issue) return ok({ mentions: [] });
-    if (session.role === "USER" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
+    if (session.role === "CLIENT" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const mentionRows = await db
       .select({

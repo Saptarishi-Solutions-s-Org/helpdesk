@@ -8,5 +8,5 @@ export default async function IssueDetailPage({
 }) {
   const user = await getSessionUser();
   const { ticketNo } = await params;
-  return <IssueDetailClient id={ticketNo} role={user?.role ?? "USER"} />;
+  return <IssueDetailClient id={ticketNo} role={user?.role ?? "CLIENT"} />;
 }

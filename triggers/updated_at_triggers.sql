@@ -18,6 +18,16 @@ create trigger set_projects_updated_at
 before update on public.projects
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_organization_projects_updated_at on public.organization_projects;
+create trigger set_organization_projects_updated_at
+before update on public.organization_projects
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_ticket_sequences_updated_at on public.ticket_sequences;
+create trigger set_ticket_sequences_updated_at
+before update on public.ticket_sequences
+for each row execute function public.set_updated_at();
+
 drop trigger if exists set_modules_updated_at on public.modules;
 create trigger set_modules_updated_at
 before update on public.modules

@@ -50,7 +50,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 
     const issue = rows[0];
     if (!issue) return ok({ issue: null }, 404);
-    if (session.role === "USER" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
+    if (session.role === "CLIENT" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const [comments, attachments, history, activity] = await Promise.all([
       db
@@ -107,7 +107,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     const current = (await db.select().from(issues).where(issueLookupFor(id)).limit(1))[0];
     if (!current) return ok({ message: "Not found" }, 404);
-    if (session.role !== "USER" || current.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
+    if (session.role !== "CLIENT" || current.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const changes: Array<{ field: string; from: string; to: string }> = [];
     if (current.title !== parsed.data.title) {

@@ -17,7 +17,7 @@ async function nextOrganizationCode() {
     .where(ilike(organizations.code, "SHDORG%"))
     .orderBy(desc(organizations.code))
     .limit(1);
-  const lastNumber = Number(latest?.code?.replace(/\D/g, "") || "0");
+  const lastNumber = Number(latest?.code?.replace(/D/g, "") || "0");
   return `SHDORG${String(lastNumber + 1).padStart(3, "0")}`;
 }
 
@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       ? or(
           ilike(organizations.name, `%${search}%`),
           ilike(organizations.code, `%${search}%`),
+          ilike(organizations.shortCode, `%${search}%`),
           ilike(organizations.contactEmail, `%${search}%`),
           ilike(organizations.contactPhone, `%${search}%`),
         )
@@ -43,6 +44,7 @@ export async function GET(req: Request) {
           name: organizations.name,
           slug: organizations.slug,
           code: organizations.code,
+          shortCode: organizations.shortCode,
           contactEmail: organizations.contactEmail,
           contactPhone: organizations.contactPhone,
           status: organizations.status,
@@ -99,6 +101,7 @@ export async function POST(req: Request) {
         name: parsed.data.name,
         slug: slugify(parsed.data.name),
         code: await nextOrganizationCode(),
+        shortCode: parsed.data.shortCode,
         contactEmail: parsed.data.contactEmail || null,
         contactPhone: parsed.data.contactPhone || null,
         status: "ACTIVE",

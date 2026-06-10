@@ -73,6 +73,7 @@ export async function PATCH(req: Request, context: RouteContext) {
         .set({
           name: parsed.data.name,
           slug: slugify(parsed.data.name),
+          shortCode: parsed.data.shortCode,
           contactEmail: parsed.data.contactEmail || null,
           contactPhone: parsed.data.contactPhone || null,
           status: parsed.data.status ?? "ACTIVE",

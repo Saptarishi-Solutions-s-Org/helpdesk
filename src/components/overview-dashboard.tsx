@@ -99,7 +99,7 @@ export function OverviewDashboard() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1>
             <p className="text-sm text-muted-foreground">
-              Users see organization-wide support stats here; admins see all organizations.
+              Track support activity, ticket progress, and resolution trends in one place.
             </p>
           </div>
           <Link
@@ -114,7 +114,7 @@ export function OverviewDashboard() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="Total Issues" value={stats.total} />
           <StatCard label="Open" value={stats.open} tone="text-blue-700" />
-          <StatCard label="Waiting" value={stats.waiting} tone="text-amber-700" />
+          <StatCard label="Waiting From Client" value={stats.waiting} tone="text-amber-700" />
           <StatCard label="Closed" value={stats.closed} tone="text-emerald-700" />
           <StatCard label="Reopened" value={stats.reopened} tone="text-red-700" />
         </div>
@@ -132,7 +132,7 @@ export function OverviewDashboard() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <SummaryItem icon={CheckCircle2} label="Assigned to project/module" value={assigned} tone="bg-emerald-50 text-emerald-700" />
                 <SummaryItem icon={AlertCircle} label="Pending triage" value={untriaged} tone="bg-amber-50 text-amber-700" />
-                <SummaryItem icon={Clock3} label="Waiting for user" value={stats.waiting} tone="bg-orange-50 text-orange-700" />
+                <SummaryItem icon={Clock3} label="Waiting From Client" value={stats.waiting} tone="bg-orange-50 text-orange-700" />
                 <SummaryItem icon={RotateCcw} label="Reopened tickets" value={stats.reopened} tone="bg-red-50 text-red-700" />
               </div>
             </CardContent>

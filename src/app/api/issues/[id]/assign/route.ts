@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { issueActivity, issueStatusHistory, issues, modules, projects } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { issueActivity, issueStatusHistory, issues, modules, organizationProjects, projects } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -30,6 +30,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         status: issues.status,
         type: issues.type,
         priority: issues.priority,
+        organizationId: issues.organizationId,
         projectId: issues.projectId,
         projectName: projects.name,
         moduleId: issues.moduleId,
@@ -42,10 +43,26 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       .limit(1);
     if (!current) return ok({ message: "Issue not found" }, 404);
 
-    const [[nextProject], [nextModule]] = await Promise.all([
+    const [[nextProject], [nextModule], [linkedProject]] = await Promise.all([
       db.select({ name: projects.name }).from(projects).where(eq(projects.id, projectId)).limit(1),
-      db.select({ name: modules.name }).from(modules).where(eq(modules.id, moduleId)).limit(1),
+      db
+        .select({ name: modules.name })
+        .from(modules)
+        .where(and(eq(modules.id, moduleId), eq(modules.projectId, projectId)))
+        .limit(1),
+      db
+        .select({ id: organizationProjects.id })
+        .from(organizationProjects)
+        .where(and(eq(organizationProjects.organizationId, current.organizationId), eq(organizationProjects.projectId, projectId)))
+        .limit(1),
     ]);
+
+    if (!nextProject || !linkedProject) {
+      return ok({ message: "Project is not linked to this organization" }, 400);
+    }
+    if (!nextModule) {
+      return ok({ message: "Module does not belong to the selected project" }, 400);
+    }
 
     const changes = [
       current.type !== type

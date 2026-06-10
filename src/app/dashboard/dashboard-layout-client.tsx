@@ -52,7 +52,7 @@ type SessionPayload = {
     id: string;
     name: string;
     email: string;
-    role: "ADMIN" | "USER";
+    role: "ADMIN" | "CLIENT";
   } | null;
 };
 

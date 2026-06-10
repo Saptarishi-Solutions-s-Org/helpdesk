@@ -56,6 +56,7 @@ export const organizations = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     slug: varchar("slug", { length: 90 }).notNull(),
     code: varchar("code", { length: 20 }).notNull(),
+    shortCode: varchar("short_code", { length: 3 }).notNull(),
     contactEmail: varchar("contact_email", { length: 180 }),
     contactPhone: varchar("contact_phone", { length: 40 }),
     status: organizationStatusEnum("status").notNull().default("ACTIVE"),
@@ -65,6 +66,7 @@ export const organizations = pgTable(
   (table) => ({
     slugUnique: uniqueIndex("organizations_slug_unique").on(table.slug),
     codeUnique: uniqueIndex("organizations_code_unique").on(table.code),
+    shortCodeUnique: uniqueIndex("organizations_short_code_unique").on(table.shortCode),
   }),
 );
 
@@ -125,6 +127,7 @@ export const projects = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: varchar("name", { length: 140 }).notNull(),
     code: varchar("code", { length: 30 }).notNull(),
+    shortCode: varchar("short_code", { length: 3 }).notNull(),
     description: text("description"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -132,6 +135,45 @@ export const projects = pgTable(
   },
   (table) => ({
     codeUnique: uniqueIndex("projects_code_unique").on(table.code),
+    shortCodeUnique: uniqueIndex("projects_short_code_unique").on(table.shortCode),
+  }),
+);
+
+export const organizationProjects = pgTable(
+  "organization_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    organizationProjectUnique: uniqueIndex("organization_projects_org_project_unique").on(
+      table.organizationId,
+      table.projectId,
+    ),
+    organizationIdx: index("organization_projects_organization_idx").on(table.organizationId),
+    projectIdx: index("organization_projects_project_idx").on(table.projectId),
+  }),
+);
+
+export const ticketSequences = pgTable(
+  "ticket_sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").references(() => projects.id),
+    projectSegment: varchar("project_segment", { length: 3 }).notNull(),
+    lastNumber: integer("last_number").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    scopeUnique: uniqueIndex("ticket_sequences_scope_unique").on(
+      table.organizationId,
+      table.projectSegment,
+    ),
   }),
 );
 
@@ -159,7 +201,7 @@ export const issues = pgTable(
   "issues",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ticketNo: varchar("ticket_no", { length: 30 }).notNull(),
+    ticketNo: varchar("ticket_no", { length: 64 }).notNull(),
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     reporterId: uuid("reporter_id").notNull().references(() => users.id),
     projectId: uuid("project_id").references(() => projects.id),

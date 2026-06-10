@@ -15,7 +15,7 @@ export type SessionUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "USER";
+  role: "ADMIN" | "CLIENT";
   organizationId: string | null;
   sessionVersion: number;
 };
@@ -83,7 +83,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       !current ||
       current.status !== "ACTIVE" ||
       current.sessionVersion !== payload.sessionVersion ||
-      (current.role === "USER" && current.organizationStatus !== "ACTIVE")
+      (current.role === "CLIENT" && current.organizationStatus !== "ACTIVE")
     ) {
       await clearSession();
       return null;
@@ -93,7 +93,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       id: current.id,
       name: current.name,
       email: current.email,
-      role: current.role as "ADMIN" | "USER",
+      role: current.role as "ADMIN" | "CLIENT",
       organizationId: current.organizationId,
       sessionVersion: current.sessionVersion,
     };

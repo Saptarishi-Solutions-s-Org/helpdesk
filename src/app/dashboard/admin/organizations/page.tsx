@@ -25,6 +25,7 @@ type OrganizationRow = {
   id: string;
   name: string;
   code: string;
+  shortCode: string;
   contactEmail: string | null;
   contactPhone: string | null;
   status: "ACTIVE" | "INACTIVE";
@@ -51,6 +52,7 @@ export default function OrganizationsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState("");
+  const [shortCode, setShortCode] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -86,6 +88,7 @@ export default function OrganizationsPage() {
 
   const resetForm = () => {
     setName("");
+    setShortCode("");
     setContactEmail("");
     setContactPhone("");
     setErrors({});
@@ -100,6 +103,7 @@ export default function OrganizationsPage() {
   const handleSubmit = () => {
     const parsed = organizationSchema.safeParse({
       name,
+      shortCode,
       contactEmail,
       contactPhone,
     });
@@ -123,7 +127,7 @@ export default function OrganizationsPage() {
       const res = await fetch("/api/admin/organizations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, contactEmail, contactPhone }),
+        body: JSON.stringify({ name, shortCode, contactEmail, contactPhone }),
       });
       const result = await res.json().catch(() => ({}));
 
@@ -207,7 +211,7 @@ export default function OrganizationsPage() {
                       {org.name}
                     </span>
                     <span className="mt-1 block text-xs font-medium text-gray-500">
-                      {org.code}
+                      {org.code} | {org.shortCode}
                     </span>
                   </span>
                 </button>
@@ -258,6 +262,20 @@ export default function OrganizationsPage() {
               {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
             </div>
             <div className="space-y-1">
+              <Label required className="mb-1">Short Code</Label>
+              <Input
+                placeholder="2-3 characters, e.g. ABC"
+                value={shortCode}
+                maxLength={3}
+                onChange={(event) => {
+                  setShortCode(event.target.value.toUpperCase());
+                  setErrors((prev) => ({ ...prev, shortCode: "" }));
+                }}
+                className={errors.shortCode ? "border-red-500 focus-visible:ring-red-500" : ""}
+              />
+              {errors.shortCode && <p className="text-sm text-red-500">{errors.shortCode}</p>}
+            </div>
+            <div className="space-y-1">
               <Label className="mb-1">Organization Code</Label>
               <Input disabled value={nextCode} className="bg-slate-50 text-slate-500" />
             </div>
@@ -286,7 +304,7 @@ export default function OrganizationsPage() {
           <div className="flex justify-end">
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting || !name.trim()}
+              disabled={isSubmitting || !name.trim() || !shortCode.trim()}
               className="bg-blue-500 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "Creating..." : "Create"}

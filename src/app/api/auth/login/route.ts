@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Account not found" }, { status: 404 });
   }
 
-  if (user.status !== "ACTIVE" || (user.role === "USER" && user.organizationStatus !== "ACTIVE")) {
+  if (user.status !== "ACTIVE" || (user.role === "CLIENT" && user.organizationStatus !== "ACTIVE")) {
     return NextResponse.json(
       { message: "Your account is inactive. Please contact admin." },
       { status: 403 },
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: user.role as "ADMIN" | "USER",
+    role: user.role as "ADMIN" | "CLIENT",
     organizationId: user.organizationId,
     sessionVersion: user.sessionVersion ?? 1,
   });

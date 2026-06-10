@@ -193,7 +193,7 @@ export default function OrganizationUsersPage() {
         return;
       }
 
-      toast.success(editingUser ? "User updated successfully" : "User created and set-password email sent");
+      toast.success(editingUser ? "Client updated successfully" : "Client created and set-password email sent");
       setConfirmOpen(false);
       setDialogOpen(false);
       resetForm();
@@ -244,7 +244,7 @@ export default function OrganizationUsersPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {organization.name} User Management
+              {organization.name} Client Management
             </h1>
             <p className="text-sm text-muted-foreground">
               {organization.code} users and invites.
@@ -260,7 +260,7 @@ export default function OrganizationUsersPage() {
           }}
         >
           <UserPlus className="h-4 w-4" />
-          Create User
+          Create Client
         </Button>
       </div>
 
@@ -355,7 +355,7 @@ export default function OrganizationUsersPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Update User" : "Create User"}</DialogTitle>
+            <DialogTitle>{editingUser ? "Update Client" : "Create Client"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
@@ -435,7 +435,7 @@ export default function OrganizationUsersPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         onConfirm={confirmSubmit}
-        title={editingUser ? "Update User" : "Create User"}
+        title={editingUser ? "Update Client" : "Create Client"}
         description={editingUser ? "Update this user?" : "Create this user and send the set-password email?"}
         isLoading={isSubmitting}
         keepOpenOnConfirm
