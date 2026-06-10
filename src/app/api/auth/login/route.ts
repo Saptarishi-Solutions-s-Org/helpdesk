@@ -40,6 +40,7 @@ export async function POST(req: Request) {
     email: user.email,
     role: user.role as "ADMIN" | "USER",
     organizationId: user.organizationId,
+    sessionVersion: user.sessionVersion ?? 1,
   });
 
   return NextResponse.json({ success: true });

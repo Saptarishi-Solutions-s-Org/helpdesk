@@ -17,6 +17,7 @@ export type SessionUser = {
   email: string;
   role: "ADMIN" | "USER";
   organizationId: string | null;
+  sessionVersion: number;
 };
 
 export async function hashPassword(password: string) {
@@ -68,6 +69,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
         email: users.email,
         status: users.status,
         organizationId: users.organizationId,
+        sessionVersion: users.sessionVersion,
         role: roles.roleName,
         organizationStatus: organizations.status,
       })
@@ -80,6 +82,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     if (
       !current ||
       current.status !== "ACTIVE" ||
+      current.sessionVersion !== payload.sessionVersion ||
       (current.role === "USER" && current.organizationStatus !== "ACTIVE")
     ) {
       await clearSession();
@@ -92,6 +95,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       email: current.email,
       role: current.role as "ADMIN" | "USER",
       organizationId: current.organizationId,
+      sessionVersion: current.sessionVersion,
     };
   } catch {
     return null;
@@ -119,6 +123,7 @@ export async function getLoginUser(email: string) {
       password: users.password,
       status: users.status,
       organizationId: users.organizationId,
+      sessionVersion: users.sessionVersion,
       organizationStatus: organizations.status,
       role: roles.roleName,
       mustChangePassword: users.mustChangePassword,

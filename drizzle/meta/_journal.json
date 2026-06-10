@@ -15,6 +15,13 @@
       "when": 1781065498262,
       "tag": "0001_sloppy_stardust",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781096816345,
+      "tag": "0002_right_adam_destine",
+      "breakpoints": true
     }
   ]
 }

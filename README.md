@@ -88,8 +88,8 @@ Admins can:
 
 - View all organization tickets.
 - Assign project/module.
-- Decide issue type: `BUG` or `CR`.
-- Decide priority: `LOW`, `MEDIUM`, `HIGH`, `URGENT`.
+- Decide issue type: `BUG`, `CR`, `ISSUE`, or `SERVICE_REQUEST`.
+- Decide priority: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`, or `BLOCKER`.
 - Change status.
 - Comment.
 - View complete activity and status history.
@@ -104,14 +104,14 @@ Supported statuses:
 OPEN
 TRIAGED
 IN_PROGRESS
-WAITING_FOR_USER
+WAITING_FROM_CLIENT
 RESOLVED
 CLOSED
 REOPENED
 CANCELLED
 ```
 
-The UI formats enum values into readable labels, for example `WAITING_FOR_USER` becomes `Waiting For User`.
+The UI formats enum values into readable labels, for example `WAITING_FROM_CLIENT` becomes `Waiting From Client`.
 
 ### Comments, History, And Attachments
 
@@ -228,6 +228,7 @@ Core tables:
 - `organizations`
 - `roles`
 - `users`
+- `organizations`
 - `set_password_tokens`
 - `password_reset_tokens`
 - `projects`
@@ -247,35 +248,6 @@ Important relations:
 - Issues belong to organizations and reporters.
 - Issues may be assigned to project/module after Admin triage.
 - Comments, attachments, status history, activity, and notifications are linked to issues.
-
-## Environment Variables
-
-Create `.env` from `.env.example`.
-
-```env
-NEXT_PUBLIC_APP_NAME="SRS Helpdesk"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_ENV="local"
-EMAIL_ASSET_BASE_URL="http://localhost:3000"
-AUTH_SECRET=""
-
-DATABASE_URL=""
-NEXT_PUBLIC_SUPABASE_URL=""
-NEXT_PUBLIC_SUPABASE_ANON_KEY=""
-
-TENANT_ID=""
-CLIENT_ID=""
-CLIENT_SECRET=""
-MICROSOFT_GRAPH_SENDER=""
-```
-
-Notes:
-
-- `DATABASE_URL` points to Supabase Postgres.
-- Supabase URL and anon key are used by the realtime client.
-- Microsoft Graph credentials are used only for account emails.
-- `AUTH_SECRET` signs the app session cookie.
-- `NEXT_PUBLIC_APP_URL` is used to build set-password and reset-password links.
 
 ## Realtime Setup
 

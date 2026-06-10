@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { Mark, mergeAttributes } from "@tiptap/core";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -16,14 +18,38 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+const MentionBadge = Mark.create({
+  name: "mentionBadge",
+  inclusive: false,
+  addAttributes() {
+    return {
+      mentionId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-mention-id"),
+        renderHTML: (attributes) => (
+          attributes.mentionId ? { "data-mention-id": attributes.mentionId } : {}
+        ),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-mention-id]" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes, { class: "mention-badge" }), 0];
+  },
+});
+
 export function RichEditor({
   value,
   onChange,
+  onKeyDown,
   placeholder = "Describe the issue clearly...",
   compact = false,
 }: {
   value: string;
   onChange: (value: string) => void;
+  onKeyDown?: (event: KeyboardEvent) => boolean | void;
   placeholder?: string;
   compact?: boolean;
 }) {
@@ -32,12 +58,24 @@ export function RichEditor({
     extensions: [
       StarterKit,
       Underline,
-      Link,
+      MentionBadge,
+      Link.configure({
+        openOnClick: false,
+        protocols: ["mention"],
+      }),
       Placeholder.configure({ placeholder }),
     ],
     content: value,
+    editorProps: {
+      handleKeyDown: (_view, event) => Boolean(onKeyDown?.(event)),
+    },
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
+
+  useEffect(() => {
+    if (!editor || editor.getHTML() === value) return;
+    editor.commands.setContent(value, { emitUpdate: false });
+  }, [editor, value]);
 
   const blockType = editor?.isActive("heading", { level: 1 })
     ? "h1"
@@ -118,6 +156,7 @@ export function RichEditor({
         editor={editor}
         className={cn(
           "prose prose-sm w-full max-w-none min-w-0 overflow-hidden p-3 text-sm [&_.ProseMirror]:min-h-32 [&_.ProseMirror]:max-w-full [&_.ProseMirror]:break-all [&_.ProseMirror]:outline-none [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror_h1]:text-lg [&_.ProseMirror_h1]:font-semibold [&_.ProseMirror_h2]:text-base [&_.ProseMirror_h2]:font-semibold [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_p]:my-2 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6",
+          "[&_.mention-badge]:inline-flex [&_.mention-badge]:rounded-full [&_.mention-badge]:border [&_.mention-badge]:border-blue-100 [&_.mention-badge]:bg-blue-50 [&_.mention-badge]:px-2 [&_.mention-badge]:py-0.5 [&_.mention-badge]:font-medium [&_.mention-badge]:text-blue-700 [&_.mention-badge]:no-underline",
           compact && "max-h-36 overflow-y-auto p-2 [&_.ProseMirror]:min-h-24",
         )}
       />

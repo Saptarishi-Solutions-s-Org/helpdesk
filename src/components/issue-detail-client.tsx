@@ -25,16 +25,17 @@ import { toIST } from "@/lib/time";
 import { formatStatus } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
-const statuses = ["OPEN", "TRIAGED", "IN_PROGRESS", "WAITING_FOR_USER", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"];
-const issueTypes = ["BUG", "CR"];
-const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const statuses = ["OPEN", "TRIAGED", "IN_PROGRESS", "WAITING_FROM_CLIENT", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"];
+const issueTypes = ["BUG", "CR", "ISSUE", "SERVICE_REQUEST"];
+const priorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL", "BLOCKER"];
 
 type OptionRow = { id: string; name: string; projectId?: string };
+type MentionCandidate = { id: string; name: string; email: string; roleName: string };
 type CommentAttachment = { url: string; label: string };
 type CommentRow = {
   id: string;
   body: string;
-  bodyJson: { attachment?: CommentAttachment } | null;
+  bodyJson: { attachment?: CommentAttachment; mentions?: Array<{ id: string; name: string }> } | null;
   authorId: string;
   authorName: string;
   createdAt: string;
@@ -64,7 +65,7 @@ const statusClassName: Record<string, string> = {
   OPEN: "border-blue-100 bg-blue-50 text-blue-700",
   TRIAGED: "border-indigo-100 bg-indigo-50 text-indigo-700",
   IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
-  WAITING_FOR_USER: "border-amber-100 bg-amber-50 text-amber-700",
+  WAITING_FROM_CLIENT: "border-amber-100 bg-amber-50 text-amber-700",
   RESOLVED: "border-emerald-100 bg-emerald-50 text-emerald-700",
   CLOSED: "border-slate-200 bg-slate-50 text-slate-600",
   REOPENED: "border-red-100 bg-red-50 text-red-700",
@@ -74,13 +75,16 @@ const statusClassName: Record<string, string> = {
 const typeClassName: Record<string, string> = {
   BUG: "border-red-100 bg-red-50 text-red-700",
   CR: "border-cyan-100 bg-cyan-50 text-cyan-700",
+  ISSUE: "border-blue-100 bg-blue-50 text-blue-700",
+  SERVICE_REQUEST: "border-emerald-100 bg-emerald-50 text-emerald-700",
 };
 
 const priorityClassName: Record<string, string> = {
   LOW: "border-slate-200 bg-slate-50 text-slate-600",
   MEDIUM: "border-blue-100 bg-blue-50 text-blue-700",
   HIGH: "border-orange-100 bg-orange-50 text-orange-700",
-  URGENT: "border-red-100 bg-red-50 text-red-700",
+  CRITICAL: "border-red-100 bg-red-50 text-red-700",
+  BLOCKER: "border-red-600 bg-red-600 text-white shadow-sm shadow-red-200",
 };
 
 function FieldValue({ label, value }: { label: string; value: string | null | undefined }) {
@@ -101,22 +105,73 @@ function formatActivityMessage(message: string) {
   return message.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (value) => formatStatus(value));
 }
 
+function displayEnum(value: string) {
+  return formatStatus(value);
+}
+
+function plainTextFromHtml(value: string) {
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getMentionQuery(value: string) {
+  const plain = plainTextFromHtml(value);
+  const mentionStart = plain.lastIndexOf("@");
+  if (mentionStart === -1) return null;
+  const query = plain.slice(mentionStart + 1);
+  if (query.length > 40 || /[,:;!?()[\]{}]/.test(query)) return null;
+  return query.toLowerCase().trim();
+}
+
+function insertMentionInHtml(value: string, mentionText: string, mentionId: string) {
+  const badgeHtml = `<span class="mention-badge" data-mention-id="${mentionId}">${mentionText}</span>&nbsp;`;
+  if (!plainTextFromHtml(value)) return `<p>${badgeHtml}</p>`;
+  const withClosingParagraph = value.replace(/@[^@<]*<\/p>\s*$/i, `${badgeHtml}</p>`);
+  if (withClosingParagraph !== value) return withClosingParagraph;
+  const inlineReplacement = value.replace(/@[^@<]*$/i, badgeHtml);
+  if (inlineReplacement !== value) return inlineReplacement;
+  if (/<\/p>\s*$/.test(value)) return value.replace(/<\/p>\s*$/, ` ${badgeHtml}</p>`);
+  return `${value}<p>${badgeHtml}</p>`;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function renderCommentBody(body: string, mentions: Array<{ id: string; name: string }>) {
+  if (!mentions.length || body.includes("mention-badge")) return body;
+  return mentions.reduce((html, mention) => {
+    const pattern = new RegExp(`@${escapeRegExp(mention.name)}(?=\\s|<|&nbsp;|$)`, "g");
+    return html.replace(
+      pattern,
+      `<span class="mention-badge" data-mention-id="${mention.id}">@${mention.name}</span>`,
+    );
+  }, body);
+}
+
 export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "USER" }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") === "history" ? "history" : "comments";
   const { data, mutate } = useSWR(`/api/issues/${id}`, fetcher, { refreshInterval: 15000 });
+  const { data: mentionData } = useSWR(data?.issue?.id ? `/api/issues/${data.issue.id}/mentions` : null, fetcher);
   const { data: projectData } = useSWR(role === "ADMIN" ? "/api/admin/projects" : null, fetcher);
   const { data: moduleData } = useSWR(role === "ADMIN" ? "/api/admin/modules" : null, fetcher);
   const issue: Issue | undefined = data?.issue;
   const viewer = data?.viewer as { id: string; role: "ADMIN" | "USER" } | undefined;
-  const [status, setStatus] = useState("IN_PROGRESS");
+  const [statusDraft, setStatusDraft] = useState<{ issueStatus: string; value: string } | null>(null);
   const [projectId, setProjectId] = useState("");
   const [moduleId, setModuleId] = useState("");
   const [type, setType] = useState("");
   const [priority, setPriority] = useState("");
   const [comment, setComment] = useState("");
+  const [closedMentionQuery, setClosedMentionQuery] = useState<string | null>(null);
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const [commentAttachmentUrl, setCommentAttachmentUrl] = useState("");
   const [commentAttachmentLabel, setCommentAttachmentLabel] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -135,7 +190,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
 
   if (!issue) return <GlobalLoader />;
   const currentIssue = issue;
-  const selectedStatus = status || currentIssue.status;
+  const selectedStatus = statusDraft?.issueStatus === currentIssue.status ? statusDraft.value : currentIssue.status;
   const selectedProjectId = projectId || currentIssue.projectId || "";
   const selectedModuleId = moduleId || currentIssue.moduleId || "";
   const selectedType = type || currentIssue.type || "";
@@ -143,6 +198,48 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
   const attachments: AttachmentRow[] = data.attachments ?? [];
   const activities: ActivityRow[] = data.activity ?? [];
   const modules = (moduleData?.modules ?? []).filter((item: OptionRow) => !selectedProjectId || item.projectId === selectedProjectId);
+  const hasTriageChanges =
+    selectedProjectId !== (currentIssue.projectId || "") ||
+    selectedModuleId !== (currentIssue.moduleId || "") ||
+    selectedType !== (currentIssue.type || "") ||
+    selectedPriority !== (currentIssue.priority || "");
+  const mentionCandidates: MentionCandidate[] = mentionData?.mentions ?? [];
+  const mentionQuery = getMentionQuery(comment);
+  const mentionSuggestions = mentionQuery === null || mentionQuery === closedMentionQuery
+    ? []
+    : mentionCandidates
+      .filter((candidate) => {
+        const haystack = `${candidate.name} ${candidate.email}`.toLowerCase();
+        return !mentionQuery || haystack.includes(mentionQuery);
+      })
+      .slice(0, 6);
+
+  const handleCommentChange = (value: string) => {
+    setComment(value);
+    const nextQuery = getMentionQuery(value);
+    if (nextQuery === null) setClosedMentionQuery(null);
+    setActiveMentionIndex(0);
+  };
+
+  const handleMentionKeyDown = (event: KeyboardEvent) => {
+    if (!mentionSuggestions.length) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index + 1) % mentionSuggestions.length);
+      return true;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+      return true;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      insertMention(mentionSuggestions[activeMentionIndex] ?? mentionSuggestions[0]);
+      return true;
+    }
+    return false;
+  };
 
   const updateTab = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -189,7 +286,12 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
     const res = await fetch(`/api/issues/${currentIssue.id}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: comment, attachmentUrl: commentAttachmentUrl, attachmentLabel: commentAttachmentLabel }),
+      body: JSON.stringify({
+        body: comment,
+        attachmentUrl: commentAttachmentUrl,
+        attachmentLabel: commentAttachmentLabel,
+        mentionedUserIds,
+      }),
     });
     if (!res.ok) {
       const result = await res.json().catch(() => ({}));
@@ -197,9 +299,20 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
       return;
     }
     setComment("");
+    setMentionedUserIds([]);
     setCommentAttachmentUrl("");
     setCommentAttachmentLabel("");
     mutate();
+  }
+
+  function insertMention(candidate: MentionCandidate) {
+    setMentionedUserIds((current) => (
+      current.includes(candidate.id) ? current : [...current, candidate.id]
+    ));
+    const mentionText = `@${candidate.name}`;
+    setComment((current) => insertMentionInHtml(current, mentionText, candidate.id));
+    setClosedMentionQuery(candidate.name.toLowerCase().trim());
+    setActiveMentionIndex(0);
   }
 
   async function deleteComment(commentId: string) {
@@ -243,6 +356,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
       });
       if (!res.ok) return toast.error("Unable to change status");
       toast.success("Status updated");
+      setStatusDraft(null);
       mutate();
     } finally {
       setIsSavingStatus(false);
@@ -274,6 +388,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
     });
     if (!res.ok) return toast.error("Unable to reopen");
     toast.success("Issue reopened");
+    setStatusDraft(null);
     mutate();
   }
 
@@ -288,8 +403,8 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 <Badge variant="outline" className={statusClassName[currentIssue.status] ?? "border-slate-200 bg-slate-50"}>
                   {formatStatus(currentIssue.status)}
                 </Badge>
-                {currentIssue.type ? <Badge variant="outline" className={typeClassName[currentIssue.type] ?? ""}>{currentIssue.type}</Badge> : null}
-                {currentIssue.priority ? <Badge variant="outline" className={priorityClassName[currentIssue.priority] ?? ""}>{currentIssue.priority}</Badge> : null}
+                {currentIssue.type ? <Badge variant="outline" className={typeClassName[currentIssue.type] ?? ""}>{displayEnum(currentIssue.type)}</Badge> : null}
+                {currentIssue.priority ? <Badge variant="outline" className={priorityClassName[currentIssue.priority] ?? ""}>{displayEnum(currentIssue.priority)}</Badge> : null}
               </div>
               <h1 className="truncate text-2xl font-semibold tracking-tight text-gray-900">{currentIssue.title}</h1>
               <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -313,7 +428,10 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
               ) : null}
               {role === "ADMIN" ? (
                 <div className="flex min-w-[260px] gap-2">
-                  <Select value={selectedStatus} onValueChange={setStatus}>
+                  <Select
+                    value={selectedStatus}
+                    onValueChange={(value) => setStatusDraft({ issueStatus: currentIssue.status, value })}
+                  >
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>{statuses.map((item) => <SelectItem key={item} value={item}>{formatStatus(item)}</SelectItem>)}</SelectContent>
                   </Select>
@@ -333,14 +451,14 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 <Label required className="mb-1">Type</Label>
                 <Select value={selectedType} onValueChange={setType}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
-                  <SelectContent>{issueTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+                  <SelectContent>{issueTypes.map((item) => <SelectItem key={item} value={item}>{displayEnum(item)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
                 <Label required className="mb-1">Priority</Label>
                 <Select value={selectedPriority} onValueChange={setPriority}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select priority" /></SelectTrigger>
-                  <SelectContent>{priorities.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+                  <SelectContent>{priorities.map((item) => <SelectItem key={item} value={item}>{displayEnum(item)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
@@ -358,7 +476,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 </Select>
               </div>
               <div className="flex items-end">
-                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" disabled={isSavingTriage || !selectedProjectId || !selectedModuleId || !selectedType || !selectedPriority} onClick={saveTriage}>
+                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" disabled={isSavingTriage || !selectedProjectId || !selectedModuleId || !selectedType || !selectedPriority || !hasTriageChanges} onClick={saveTriage}>
                   {isSavingTriage ? "Saving..." : "Save Triage"}
                 </Button>
               </div>
@@ -424,6 +542,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 {(data.comments ?? []).map((item: CommentRow) => {
                   const canDelete = viewer?.id === item.authorId;
                   const attachment = item.bodyJson?.attachment;
+                  const mentions = item.bodyJson?.mentions ?? [];
 
                   return (
                     <div key={item.id} className="rounded-lg border bg-slate-50 p-3">
@@ -445,8 +564,8 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                         </span>
                       </div>
                       <div
-                        className="mt-2 text-sm leading-6 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
-                        dangerouslySetInnerHTML={{ __html: item.body }}
+                        className="mt-2 text-sm leading-6 [&_.mention-badge]:inline-flex [&_.mention-badge]:rounded-full [&_.mention-badge]:border [&_.mention-badge]:border-blue-100 [&_.mention-badge]:bg-blue-50 [&_.mention-badge]:px-2 [&_.mention-badge]:py-0.5 [&_.mention-badge]:font-medium [&_.mention-badge]:text-blue-700 [&_.mention-badge]:no-underline [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
+                        dangerouslySetInnerHTML={{ __html: renderCommentBody(item.body, mentions) }}
                       />
                       {attachment ? (
                         <a
@@ -467,7 +586,28 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "U
                 })}
                 <form onSubmit={postComment} className="space-y-3">
                   <Label>Add comment</Label>
-                  <RichEditor value={comment} onChange={setComment} placeholder="Write a comment..." />
+                  <div className="relative">
+                    <RichEditor value={comment} onChange={handleCommentChange} onKeyDown={handleMentionKeyDown} placeholder="Write a comment..." />
+                    {mentionSuggestions.length ? (
+                      <div className="absolute left-4 top-[92px] z-20 w-full max-w-sm overflow-hidden rounded-md border bg-white shadow-lg">
+                        <div className="max-h-56 overflow-y-auto py-1">
+                          {mentionSuggestions.map((candidate, index) => (
+                            <button
+                              key={candidate.id}
+                              type="button"
+                              className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50 ${index === activeMentionIndex ? "bg-blue-50" : ""}`}
+                              onClick={() => insertMention(candidate)}
+                            >
+                              <span className="min-w-0 truncate">{candidate.name}</span>
+                              <span className="shrink-0 rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                {formatStatus(candidate.roleName)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-1">
                       <Label className="mb-1">Attachment Link</Label>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, MoreHorizontal, Pencil, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreHorizontal, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -333,7 +333,6 @@ export default function OrganizationUsersPage() {
                           className={tableActionItemClassName}
                           onClick={() => openUpdateDialog(user)}
                         >
-                          <Pencil className="h-4 w-4" />
                           Update
                         </DropdownMenuItem>
                       </DropdownMenuContent>

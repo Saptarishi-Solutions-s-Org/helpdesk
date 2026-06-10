@@ -17,18 +17,19 @@ export const organizationStatusEnum = pgEnum("organization_status", [
   "INACTIVE",
 ]);
 export const userStatusEnum = pgEnum("user_status", ["ACTIVE", "INACTIVE"]);
-export const issueTypeEnum = pgEnum("issue_type", ["BUG", "CR"]);
+export const issueTypeEnum = pgEnum("issue_type", ["BUG", "CR", "ISSUE", "SERVICE_REQUEST"]);
 export const issuePriorityEnum = pgEnum("issue_priority", [
   "LOW",
   "MEDIUM",
   "HIGH",
-  "URGENT",
+  "CRITICAL",
+  "BLOCKER",
 ]);
 export const issueStatusEnum = pgEnum("issue_status", [
   "OPEN",
   "TRIAGED",
   "IN_PROGRESS",
-  "WAITING_FOR_USER",
+  "WAITING_FROM_CLIENT",
   "RESOLVED",
   "CLOSED",
   "REOPENED",
@@ -88,6 +89,7 @@ export const users = pgTable(
     designation: varchar("designation", { length: 120 }),
     status: userStatusEnum("status").notNull().default("ACTIVE"),
     mustChangePassword: boolean("must_change_password").notNull().default(true),
+    sessionVersion: integer("session_version").notNull().default(1),
     avatarUrl: text("avatar_url"),
     lastLoginAt: timestamp("last_login_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

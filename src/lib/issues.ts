@@ -2,7 +2,7 @@ export const openStatuses = [
   "OPEN",
   "TRIAGED",
   "IN_PROGRESS",
-  "WAITING_FOR_USER",
+  "WAITING_FROM_CLIENT",
   "REOPENED",
 ] as const;
 

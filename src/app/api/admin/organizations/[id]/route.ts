@@ -84,7 +84,11 @@ export async function PATCH(req: Request, context: RouteContext) {
       if (parsed.data.status === "INACTIVE") {
         await tx
           .update(users)
-          .set({ status: "INACTIVE", updatedAt: new Date() })
+          .set({
+            status: "INACTIVE",
+            sessionVersion: sql`${users.sessionVersion} + 1`,
+            updatedAt: new Date(),
+          })
           .where(eq(users.organizationId, existing.id));
       }
 

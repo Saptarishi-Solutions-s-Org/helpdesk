@@ -90,7 +90,7 @@ export async function PATCH(req: Request) {
     }
 
     const [existing] = await db
-      .select({ id: users.id })
+      .select({ id: users.id, status: users.status })
       .from(users)
       .where(eq(users.id, parsed.data.id))
       .limit(1);
@@ -114,6 +114,9 @@ export async function PATCH(req: Request) {
         phone: parsed.data.phone || null,
         designation: parsed.data.designation || null,
         status: parsed.data.status,
+        ...(parsed.data.status === "INACTIVE" && existing.status !== "INACTIVE"
+          ? { sessionVersion: sql`${users.sessionVersion} + 1` }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(users.id, parsed.data.id))

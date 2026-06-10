@@ -33,4 +33,5 @@ export const commentSchema = z.object({
     .refine((value) => richTextToPlainText(value).length > 0, "Comment is required."),
   attachmentUrl: z.string().trim().url("Enter a valid attachment link.").optional().or(z.literal("")),
   attachmentLabel: z.string().trim().max(120, "Label must be 120 characters or less.").optional(),
+  mentionedUserIds: z.array(z.string().uuid()).optional(),
 });

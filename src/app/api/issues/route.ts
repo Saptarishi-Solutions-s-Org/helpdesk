@@ -48,7 +48,7 @@ export async function GET(req: Request) {
       total: rows.length,
       open: rows.filter((row) => openStatuses.includes(row.status as never)).length,
       closed: rows.filter((row) => ["RESOLVED", "CLOSED", "CANCELLED"].includes(row.status)).length,
-      waiting: rows.filter((row) => row.status === "WAITING_FOR_USER").length,
+      waiting: rows.filter((row) => row.status === "WAITING_FROM_CLIENT").length,
       reopened: rows.filter((row) => row.reopenedCount > 0 || row.status === "REOPENED").length,
     };
 
