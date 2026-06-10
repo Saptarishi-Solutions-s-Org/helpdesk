@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { and, eq, ilike, ne, or, sql } from "drizzle-orm";
 import { organizations, roles, setPasswordTokens, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { hashPassword, requireAdmin } from "@/lib/auth";
@@ -9,7 +9,7 @@ import {
   buildPaginationMeta,
   getPaginationParams,
 } from "@/lib/pagination";
-import { userSchema } from "@/lib/validators/admin-config";
+import { userSchema, userUpdateSchema } from "@/lib/validators/admin-config";
 
 export async function GET(req: Request) {
   try {
@@ -64,6 +64,62 @@ export async function GET(req: Request) {
       users: rows,
       pagination: buildPaginationMeta(page, limit, totalRows[0]?.count ?? 0),
     });
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    await requireAdmin();
+    const body = await req.json();
+    const parsed = userUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return ok({ message: parsed.error.issues[0]?.message ?? "Invalid user" }, 400);
+    }
+
+    const [organization] = await db
+      .select({ id: organizations.id, status: organizations.status })
+      .from(organizations)
+      .where(eq(organizations.id, parsed.data.organizationId))
+      .limit(1);
+
+    if (!organization) return ok({ message: "Organization not found" }, 404);
+    if (organization.status !== "ACTIVE" && parsed.data.status === "ACTIVE") {
+      return ok({ message: "Organization is inactive. Activate the organization before activating users." }, 400);
+    }
+
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, parsed.data.id))
+      .limit(1);
+
+    if (!existing) return ok({ message: "User not found" }, 404);
+
+    const [duplicateEmail] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, parsed.data.email.toLowerCase()), ne(users.id, parsed.data.id)))
+      .limit(1);
+
+    if (duplicateEmail) return ok({ message: "Email is already used by another user" }, 400);
+
+    const [updated] = await db
+      .update(users)
+      .set({
+        organizationId: parsed.data.organizationId,
+        name: parsed.data.name,
+        email: parsed.data.email.toLowerCase(),
+        phone: parsed.data.phone || null,
+        designation: parsed.data.designation || null,
+        status: parsed.data.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, parsed.data.id))
+      .returning();
+
+    return ok({ user: updated });
   } catch (error) {
     return apiError(error);
   }

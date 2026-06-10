@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { roles, users } from "@/db/schema";
+import { organizations, roles, users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 const SESSION_COOKIE = "srs_helpdesk_session";
@@ -60,7 +60,39 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   try {
     const verified = await jwtVerify(token, secret);
-    return verified.payload as SessionUser;
+    const payload = verified.payload as SessionUser;
+    const [current] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        status: users.status,
+        organizationId: users.organizationId,
+        role: roles.roleName,
+        organizationStatus: organizations.status,
+      })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .leftJoin(organizations, eq(users.organizationId, organizations.id))
+      .where(eq(users.id, payload.id))
+      .limit(1);
+
+    if (
+      !current ||
+      current.status !== "ACTIVE" ||
+      (current.role === "USER" && current.organizationStatus !== "ACTIVE")
+    ) {
+      await clearSession();
+      return null;
+    }
+
+    return {
+      id: current.id,
+      name: current.name,
+      email: current.email,
+      role: current.role as "ADMIN" | "USER",
+      organizationId: current.organizationId,
+    };
   } catch {
     return null;
   }
@@ -87,11 +119,13 @@ export async function getLoginUser(email: string) {
       password: users.password,
       status: users.status,
       organizationId: users.organizationId,
+      organizationStatus: organizations.status,
       role: roles.roleName,
       mustChangePassword: users.mustChangePassword,
     })
     .from(users)
     .innerJoin(roles, eq(users.roleId, roles.id))
+    .leftJoin(organizations, eq(users.organizationId, organizations.id))
     .where(eq(users.email, email.toLowerCase()))
     .limit(1);
 

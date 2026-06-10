@@ -14,13 +14,20 @@ export async function POST(req: Request) {
   const { email, password } = parsed.data;
   const user = await getLoginUser(email.toLowerCase());
 
-  if (!user || user.status !== "ACTIVE") {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ message: "Account not found" }, { status: 404 });
+  }
+
+  if (user.status !== "ACTIVE" || (user.role === "USER" && user.organizationStatus !== "ACTIVE")) {
+    return NextResponse.json(
+      { message: "Your account is inactive. Please contact admin." },
+      { status: 403 },
+    );
   }
 
   const valid = await verifyPassword(password, user.password);
   if (!valid) {
-    return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json({ message: "Wrong password" }, { status: 401 });
   }
 
   if (user.mustChangePassword) {

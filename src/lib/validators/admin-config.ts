@@ -20,6 +20,11 @@ export const userSchema = z.object({
   designation: z.string().trim().optional(),
 });
 
+export const userUpdateSchema = userSchema.extend({
+  id: z.string().uuid("User is required."),
+  status: z.enum(["ACTIVE", "INACTIVE"]),
+});
+
 export const projectSchema = z.object({
   name: z.string().trim().min(2, "Project name is required."),
   code: z

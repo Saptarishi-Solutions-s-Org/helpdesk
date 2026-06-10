@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ export function LoginForm() {
   const [remember, setRemember] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     const savedEmail = localStorage.getItem("helpdeskLoginEmail");
@@ -32,10 +33,11 @@ export function LoginForm() {
     event.preventDefault();
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message || "Invalid login details");
+      setLoginError(parsed.error.issues[0]?.message || "Invalid login details");
       return;
     }
 
+    setLoginError("");
     setLoading(true);
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -47,7 +49,8 @@ export function LoginForm() {
     });
     setLoading(false);
     if (!res.ok) {
-      toast.error((await res.json()).message || "Login failed");
+      const result = await res.json().catch(() => ({}));
+      setLoginError(result.message || "Login failed");
       return;
     }
     if (remember) {
@@ -61,6 +64,15 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} className="space-y-5">
+      {loginError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{loginError}</span>
+        </div>
+      ) : null}
       <div>
         <label className="mb-2 block text-xs font-bold text-[#34302c]">
           Email address
@@ -74,7 +86,10 @@ export function LoginForm() {
             autoComplete="email"
             placeholder="you@saptarishi.tech"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setLoginError("");
+            }}
             disabled={loading}
             className="h-12 rounded-2xl border-[#ddd6cc] bg-[#fffdf9] pl-10 text-sm focus-visible:ring-[#8B5CF6]"
           />
@@ -100,7 +115,10 @@ export function LoginForm() {
             autoComplete="current-password"
             placeholder="Enter password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setLoginError("");
+            }}
             disabled={loading}
             className="h-12 rounded-2xl border-[#ddd6cc] bg-[#fffdf9] pl-10 pr-11 text-sm focus-visible:ring-[#8B5CF6]"
           />

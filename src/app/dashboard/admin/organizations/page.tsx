@@ -54,6 +54,7 @@ export default function OrganizationsPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [navigatingCode, setNavigatingCode] = useState("");
 
   useRealtime(["organizations", "users", "issues"], () => {
     void mutate(undefined, { revalidate: true });
@@ -88,6 +89,12 @@ export default function OrganizationsPage() {
     setContactEmail("");
     setContactPhone("");
     setErrors({});
+  };
+
+  const openOrganization = (code: string) => {
+    if (navigatingCode) return;
+    setNavigatingCode(code);
+    router.push(`/dashboard/admin/organizations/${code}`);
   };
 
   const handleSubmit = () => {
@@ -189,7 +196,8 @@ export default function OrganizationsPage() {
                 <button
                   type="button"
                   className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                  onClick={() => router.push(`/dashboard/admin/organizations/${org.code}`)}
+                  disabled={Boolean(navigatingCode)}
+                  onClick={() => openOrganization(org.code)}
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
                     <Building2 className="h-5 w-5" />
@@ -215,7 +223,9 @@ export default function OrganizationsPage() {
                 >
                   {org.status}
                 </span>
-                <span className="text-xs text-gray-500">Open</span>
+                <span className="text-xs text-gray-500">
+                  {navigatingCode === org.code ? "Opening..." : "Open"}
+                </span>
               </div>
             </div>
           ))}

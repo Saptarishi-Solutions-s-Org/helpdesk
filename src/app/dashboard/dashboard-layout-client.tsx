@@ -128,7 +128,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [logoutOpen, setLogoutOpen] = useState(false);
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
   const notificationSeededRef = useRef(false);
-  const { data: sessionData } = useSWR<SessionPayload>("/api/auth/session", fetcher);
+  const { data: sessionData, mutate: mutateSession } = useSWR<SessionPayload>("/api/auth/session", fetcher);
   const user = sessionData?.user;
   const links = user?.role === "ADMIN" ? adminLinks : userLinks;
   const { data, mutate } = useSWR("/api/notifications", fetcher, {
@@ -160,9 +160,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
   });
 
-  useRealtime(["users"], () => {
+  useRealtime(["users", "organizations"], () => {
+    void mutateSession();
     void mutateProfile();
   });
+
+  useEffect(() => {
+    if (sessionData && !sessionData.user) {
+      router.replace("/login");
+      router.refresh();
+    }
+  }, [router, sessionData]);
 
   useEffect(() => {
     const notifications = (data?.notifications ?? []) as NotificationRow[];

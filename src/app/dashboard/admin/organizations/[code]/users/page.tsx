@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, MoreHorizontal, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreHorizontal, Pencil, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -44,7 +45,7 @@ import {
   emptyPagination,
   type PaginationMeta,
 } from "@/lib/pagination";
-import { userSchema } from "@/lib/validators/admin-config";
+import { userSchema, userUpdateSchema } from "@/lib/validators/admin-config";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -99,6 +100,8 @@ export default function OrganizationUsersPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [designation, setDesignation] = useState("");
+  const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   useRealtime(["users", "roles", "organizations"], () => {
@@ -120,21 +123,28 @@ export default function OrganizationUsersPage() {
   };
 
   const resetForm = () => {
+    setEditingUser(null);
     setName("");
     setEmail("");
     setPhone("");
     setDesignation("");
+    setStatus("ACTIVE");
     setErrors({});
   };
 
   const handleSubmit = () => {
-    const parsed = userSchema.safeParse({
+    const payload = {
+      id: editingUser?.id,
       organizationId,
       name,
       email,
       phone,
       designation,
-    });
+      status,
+    };
+    const parsed = editingUser
+      ? userUpdateSchema.safeParse(payload)
+      : userSchema.safeParse(payload);
 
     if (!parsed.success) {
       const fieldErrors: FieldErrors = {};
@@ -149,28 +159,41 @@ export default function OrganizationUsersPage() {
     setConfirmOpen(true);
   };
 
+  const openUpdateDialog = (user: UserRow) => {
+    setEditingUser(user);
+    setName(user.name);
+    setEmail(user.email);
+    setPhone(user.phone || "");
+    setDesignation(user.designation || "");
+    setStatus(user.status);
+    setErrors({});
+    setDialogOpen(true);
+  };
+
   const confirmSubmit = async () => {
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/admin/users", {
-        method: "POST",
+        method: editingUser ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingUser?.id,
           organizationId,
           name,
           email,
           phone,
           designation,
+          status,
         }),
       });
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        toast.error(result.message || "Unable to create user");
+        toast.error(result.message || `Unable to ${editingUser ? "update" : "create"} user`);
         return;
       }
 
-      toast.success("User created and set-password email sent");
+      toast.success(editingUser ? "User updated successfully" : "User created and set-password email sent");
       setConfirmOpen(false);
       setDialogOpen(false);
       resetForm();
@@ -306,8 +329,12 @@ export default function OrganizationUsersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className={tableActionMenuContentClassName}>
-                        <DropdownMenuItem className={tableActionItemClassName}>
-                          View Details
+                        <DropdownMenuItem
+                          className={tableActionItemClassName}
+                          onClick={() => openUpdateDialog(user)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Update
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -329,7 +356,7 @@ export default function OrganizationUsersPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
+            <DialogTitle>{editingUser ? "Update User" : "Create User"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
@@ -378,6 +405,20 @@ export default function OrganizationUsersPage() {
                 onChange={(event) => setDesignation(event.target.value)}
               />
             </div>
+            {editingUser ? (
+              <div className="space-y-1">
+                <Label required className="mb-1">Status</Label>
+                <Select value={status} onValueChange={(value) => setStatus(value as "ACTIVE" | "INACTIVE")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
           <div className="flex justify-end">
             <Button
@@ -385,7 +426,7 @@ export default function OrganizationUsersPage() {
               disabled={isSubmitting || !name.trim() || !email.trim()}
               className="bg-blue-500 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? "Creating..." : "Create"}
+              {isSubmitting ? (editingUser ? "Updating..." : "Creating...") : editingUser ? "Update" : "Create"}
             </Button>
           </div>
         </DialogContent>
@@ -395,8 +436,8 @@ export default function OrganizationUsersPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         onConfirm={confirmSubmit}
-        title="Create User"
-        description="Create this user and send the set-password email?"
+        title={editingUser ? "Update User" : "Create User"}
+        description={editingUser ? "Update this user?" : "Create this user and send the set-password email?"}
         isLoading={isSubmitting}
         keepOpenOnConfirm
       />
