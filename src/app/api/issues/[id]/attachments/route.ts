@@ -16,7 +16,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       : eq(issues.ticketNo, value);
     const issue = (await db.select().from(issues).where(issueLookup).limit(1))[0];
     if (!issue) return ok({ message: "Not found" }, 404);
-    if (session.role === "USER" && issue.reporterId !== session.id) throw new Error("FORBIDDEN");
+    if (session.role === "USER" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const body = await req.json();
     const rawLinks = Array.isArray(body.attachments) ? body.attachments : [body];

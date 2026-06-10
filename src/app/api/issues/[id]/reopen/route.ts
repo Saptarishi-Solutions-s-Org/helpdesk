@@ -12,7 +12,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const { reason } = await req.json();
     const current = (await db.select().from(issues).where(eq(issues.id, id)).limit(1))[0];
     if (!current) return ok({ message: "Not found" }, 404);
-    if (session.role === "USER" && current.reporterId !== session.id) throw new Error("FORBIDDEN");
+    if (session.role === "USER" && current.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
     await db
       .update(issues)
       .set({

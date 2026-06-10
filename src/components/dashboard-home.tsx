@@ -34,7 +34,9 @@ export function DashboardHome({ showRaiseIssue = false }: { showRaiseIssue?: boo
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Issue Center</h1>
           <p className="text-sm text-muted-foreground">
-            Track your opened and closed support issues in one clean workspace.
+            {showRaiseIssue
+              ? "Track support issues raised by your organization. You can comment and update ticket details from the issue page."
+              : "Track opened and closed support issues across organizations."}
           </p>
         </div>
         {showRaiseIssue ? <NewIssueForm onCreated={() => void mutate()} /> : null}

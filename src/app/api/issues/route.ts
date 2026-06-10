@@ -13,7 +13,10 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const view = url.searchParams.get("view");
     const filters = [];
-    if (session.role === "USER") filters.push(eq(issues.reporterId, session.id));
+    if (session.role === "USER") {
+      if (!session.organizationId) throw new Error("FORBIDDEN");
+      filters.push(eq(issues.organizationId, session.organizationId));
+    }
     if (view === "open") filters.push(inArray(issues.status, [...openStatuses]));
     if (view === "closed") filters.push(inArray(issues.status, ["RESOLVED", "CLOSED", "CANCELLED"]));
 
