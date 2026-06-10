@@ -4,6 +4,7 @@ import { apiError, ok } from "@/lib/api";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notifyIssueWatchers } from "@/lib/notifications";
+import { formatStatus } from "@/lib/utils";
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -31,14 +32,14 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       issueId: id,
       actorId: session.id,
       type: "STATUS_CHANGED",
-      message: `Status changed from ${current.status} to ${status}`,
+      message: `Status changed from ${formatStatus(current.status)} to ${formatStatus(status)}`,
     });
     await notifyIssueWatchers({
       issueId: id,
       actorId: session.id,
       type: status === "CLOSED" ? "ISSUE_CLOSED" : "STATUS_CHANGED",
       title: "Issue status changed",
-      message: `${current.ticketNo} is now ${status}`,
+      message: `${current.ticketNo} is now ${formatStatus(status)}`,
     });
     return ok({ success: true });
   } catch (error) {

@@ -4,9 +4,9 @@ import { getSessionUser } from "@/lib/auth";
 export default async function IssueDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ ticketNo: string }>;
 }) {
   const user = await getSessionUser();
-  const { id } = await params;
-  return <IssueDetailClient id={id} role={user?.role ?? "USER"} />;
+  const { ticketNo } = await params;
+  return <IssueDetailClient id={ticketNo} role={user?.role ?? "USER"} />;
 }

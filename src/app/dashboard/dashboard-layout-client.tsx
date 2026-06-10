@@ -43,7 +43,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useRealtime } from "@/hooks/useRealtime";
-import { cn } from "@/lib/utils";
+import { cn, formatStatus } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -117,6 +117,11 @@ function isSidebarHrefActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function cleanNotificationText(value?: string | null) {
+  if (!value) return "";
+  return value.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (match) => formatStatus(match));
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -144,7 +149,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!row || row.recipient_id !== user?.id) return;
 
     toast.info(row.title || "New notification", {
-      description: row.message,
+      description: cleanNotificationText(row.message),
       duration: 3500,
       action: row.link
         ? {
@@ -186,7 +191,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     freshUnread.slice(0, 3).forEach((notification) => {
       toast.info(notification.title || "New notification", {
-        description: notification.message,
+        description: cleanNotificationText(notification.message),
         duration: 3500,
         action: notification.link
           ? {
@@ -316,10 +321,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           )}
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold leading-5 text-slate-800">
-                              {note.title}
+                              {cleanNotificationText(note.title)}
                             </p>
                             <p className="whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">
-                              {note.message}
+                              {cleanNotificationText(note.message)}
                             </p>
                           </div>
                           <div className="flex shrink-0 flex-col items-center gap-2">

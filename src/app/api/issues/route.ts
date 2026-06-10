@@ -1,10 +1,11 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { issueActivity, issueStatusHistory, issues, modules, organizations, projects, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { nextTicketNo, openStatuses } from "@/lib/issues";
 import { notifyIssueWatchers } from "@/lib/notifications";
+import { createIssueSchema } from "@/lib/validators/issue";
 
 export async function GET(req: Request) {
   try {
@@ -59,19 +60,31 @@ export async function POST(req: Request) {
     const session = await requireUser();
     if (!session.organizationId && session.role === "USER") throw new Error("FORBIDDEN");
     const body = await req.json();
+    const parsed = createIssueSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return ok({ message: parsed.error.issues[0]?.message ?? "Invalid issue details" }, 400);
+    }
+
     const orgId = body.organizationId || session.organizationId;
     if (session.role === "USER" && orgId !== session.organizationId) throw new Error("FORBIDDEN");
+    const [lastTicket] = await db
+      .select({ ticketNo: issues.ticketNo })
+      .from(issues)
+      .where(like(issues.ticketNo, "SRS-HD-%"))
+      .orderBy(sql`cast(regexp_replace(${issues.ticketNo}, '^SRS-HD-', '') as integer) desc`)
+      .limit(1);
 
     const rows = await db
       .insert(issues)
       .values({
-        ticketNo: nextTicketNo(),
+        ticketNo: await nextTicketNo(async () => lastTicket?.ticketNo ?? null),
         organizationId: orgId,
         reporterId: session.id,
-        type: body.type,
-        priority: body.priority || "MEDIUM",
-        title: body.title,
-        description: body.description,
+        type: null,
+        priority: null,
+        title: parsed.data.title,
+        description: parsed.data.description,
         descriptionJson: body.descriptionJson || null,
       })
       .returning();
