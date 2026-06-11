@@ -6,7 +6,7 @@ The application is designed around client support and internal support roles:
 
 - `ADMIN`: SRS/internal support user. Admins can see all organizations, configure support routing, create tickets on behalf of clients, triage issues, change statuses, and manage organizations/users/projects/modules.
 - `CLIENT`: Client organization user. Clients can see issue activity for their own organization, raise new issues, update ticket details, add comments, reopen closed/resolved tickets, and collaborate on organization tickets.
-- `DEVELOPER` and `QUALITY ANALYST`: internal team users. These roles are currently read-only in the issue flow; deeper internal assignment/clone workflows are future work.
+- `DEVELOPER` and `QUALITY ANALYST`: internal team users. These roles work on cloned SIT tickets only; they do not see client-facing SHD issue lists.
 
 ## How The System Works
 
@@ -47,7 +47,7 @@ Clients belong to an organization and role.
 Projects and modules are configured routing values. They are not free-text fields during triage.
 
 - Projects have generated codes like `SRSHD001`.
-- Projects also have a required 2-3 character `shortCode` for compact project identity and future internal workflows.
+- Projects also have a required 2-3 character `shortCode` for compact project identity.
 - Projects must be linked to organizations before client tickets can be created or triaged against them.
 - Modules have generated codes like `SRSHDM001`.
 - Modules belong to projects.
@@ -139,6 +139,35 @@ Issue detail pages are built like a support/Jira-style ticket view.
 - History shows status movement and activity entries.
 - Activity tracks from/to values for edited ticket fields, attachment changes, comment deletion, and lifecycle movement.
 
+
+### Internal SIT Workflow
+
+Admins can clone a client-facing SHD ticket into one linked internal SIT ticket. The SHD ticket stays visible to the client organization, while the SIT ticket is visible only to Admin, Developer, and Quality Analyst users.
+
+Internal ticket numbers are generated per organization:
+
+```text
+SIT-ORG-1
+SIT-ORG-2
+SIT-ORG-1000000
+```
+
+The cloned SIT ticket keeps readonly context from SHD: title, description, organization, project, module, type, and priority. SHD comments appear in the SIT detail as a readonly Client Thread. SIT comments, worklogs, and internal history never appear in the SHD ticket.
+
+Internal statuses:
+
+```text
+NEW
+ACCEPTED
+DEV_IN_PROGRESS
+DEV_REVIEW
+READY_FOR_QA
+QA_IN_PROGRESS
+READY_FOR_PRODUCTION
+REOPENED
+```
+
+Admin assigns the Developer, Quality Analyst, and optional Admin owner. Assigned Developer and assigned QA can also update internal ownership. Developers accept work, move through development, and send the ticket to QA. Developer worklogs run during `DEV_IN_PROGRESS`; QA worklogs run during `QA_IN_PROGRESS`. Active worklogs stop automatically when the ticket leaves that lane or when the assigned owner changes. QA moves work through QA and either marks it `READY_FOR_PRODUCTION` or reopens it back to development. Admin then controls the client-facing SHD movement to `QUEUED_FOR_RELEASE` and `RESOLVED` after deployment.
 ### Notifications And Realtime
 
 The app uses a `notifications` table plus Supabase Realtime.
@@ -249,6 +278,11 @@ Core tables:
 - `password_reset_tokens`
 - `projects`
 - `organization_projects`
+- `internal_tickets`
+- `internal_ticket_comments`
+- `internal_ticket_status_history`
+- `internal_ticket_activity`
+- `internal_ticket_worklogs`
 - `ticket_sequences`
 - `modules`
 - `issues`
@@ -268,6 +302,7 @@ Important relations:
 - Issues belong to organizations and reporters.
 - Issues may be assigned to project/module after Admin triage.
 - Comments, attachments, status history, activity, and notifications are linked to issues.
+- Internal tickets are linked to one parent SHD issue and keep separate internal comments, history, activity, and worklogs.
 
 ## Realtime Setup
 
@@ -283,6 +318,11 @@ Supabase Realtime should be enabled for tables that drive live UI updates:
 - `organizations`
 - `projects`
 - `organization_projects`
+- `internal_tickets`
+- `internal_ticket_comments`
+- `internal_ticket_status_history`
+- `internal_ticket_activity`
+- `internal_ticket_worklogs`
 
 The UI also uses SWR refresh intervals as a backup.
 
@@ -347,6 +387,8 @@ npm run build
 - Ticket edits, comments, deletes, attachment changes, reopen, and status changes are tracked.
 - Notifications appear in the header and update through Supabase Realtime.
 - No Cloudinary upload flow is used; attachments are external links only.
+- SIT comments and worklogs remain internal-only; SHD client comments are readonly in SIT.
+- SIT worklogs support both Developer and Quality Analyst lanes, with automatic stop on reassignment or status lane exit.
 
 ## Current Design Rules
 
@@ -356,3 +398,5 @@ npm run build
 - Do not send lifecycle emails for issue activity.
 - Use global loaders instead of ad hoc loading blocks.
 - Keep enum values human-readable in UI and notifications.
+
+

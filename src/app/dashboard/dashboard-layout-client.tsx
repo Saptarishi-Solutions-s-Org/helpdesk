@@ -12,6 +12,7 @@ import {
   Building2,
   Check,
   CheckCheck,
+  Code2,
   ExternalLink,
   FolderKanban,
   Home,
@@ -44,7 +45,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useRealtime } from "@/hooks/useRealtime";
-import { cn, formatStatus } from "@/lib/utils";
+import { cn, formatEnumText } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -88,8 +89,14 @@ const userLinks = [
   { href: "/dashboard/issues", label: "Issues", icon: Ticket },
 ];
 
+const internalLinks = [
+  { href: "/dashboard", label: "Overview", icon: Home },
+  { href: "/dashboard/internal-tickets", label: "Internal Tickets", icon: Code2 },
+];
+
 const adminLinks = [
   ...userLinks,
+  { href: "/dashboard/internal-tickets", label: "Internal Tickets", icon: Code2 },
   { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard/admin/modules", label: "Modules", icon: Boxes },
@@ -120,8 +127,7 @@ function isSidebarHrefActive(pathname: string, href: string) {
 }
 
 function cleanNotificationText(value?: string | null) {
-  if (!value) return "";
-  return value.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (match) => formatStatus(match));
+  return formatEnumText(value);
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -132,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const notificationSeededRef = useRef(false);
   const { data: sessionData, mutate: mutateSession } = useSWR<SessionPayload>("/api/auth/session", fetcher);
   const user = sessionData?.user;
-  const links = user?.role === "ADMIN" ? adminLinks : userLinks;
+  const links = user?.role === "ADMIN" ? adminLinks : user?.role === "DEVELOPER" || user?.role === "QUALITY ANALYST" ? internalLinks : userLinks;
   const { data, mutate } = useSWR("/api/notifications", fetcher, {
     refreshInterval: 5000,
   });
@@ -405,3 +411,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
   );
 }
+

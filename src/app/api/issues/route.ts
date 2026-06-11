@@ -10,6 +10,7 @@ import { attachmentLinkSchema, createIssueSchema } from "@/lib/validators/issue"
 export async function GET(req: Request) {
   try {
     const session = await requireUser();
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
     const url = new URL(req.url);
     const view = url.searchParams.get("view");
     const filters = [];
@@ -183,4 +184,6 @@ export async function POST(req: Request) {
     return apiError(error);
   }
 }
+
+
 

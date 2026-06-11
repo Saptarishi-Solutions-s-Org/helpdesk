@@ -1,5 +1,5 @@
 import { desc, eq, or } from "drizzle-orm";
-import { issueActivity, issueAttachments, issueComments, issueStatusHistory, issues, modules, organizations, projects, users } from "@/db/schema";
+import { internalTickets, issueActivity, issueAttachments, issueComments, issueStatusHistory, issues, modules, organizations, projects, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -17,6 +17,7 @@ const issueLookupFor = (id: string) => {
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireUser();
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
     const { id } = await context.params;
     const issueLookup = issueLookupFor(id);
     const rows = await db
@@ -52,7 +53,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     if (!issue) return ok({ issue: null }, 404);
     if (session.role === "CLIENT" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
-    const [comments, attachments, history, activity] = await Promise.all([
+    const [comments, attachments, history, activity, internalTicket] = await Promise.all([
       db
         .select({
           id: issueComments.id,
@@ -86,9 +87,15 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
         .leftJoin(users, eq(issueActivity.actorId, users.id))
         .where(eq(issueActivity.issueId, issue.id))
         .orderBy(desc(issueActivity.createdAt)),
+      db
+        .select({ id: internalTickets.id, ticketNo: internalTickets.ticketNo, status: internalTickets.status })
+        .from(internalTickets)
+        .where(eq(internalTickets.parentIssueId, issue.id))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
     ]);
 
-    return ok({ issue, comments, attachments, history, activity, viewer: { id: session.id, role: session.role } });
+    return ok({ issue, comments, attachments, history, activity, internalTicket, viewer: { id: session.id, role: session.role } });
   } catch (error) {
     return apiError(error);
   }
@@ -97,6 +104,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireUser();
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
     const { id } = await context.params;
     const body = await req.json();
     const parsed = createIssueSchema.safeParse(body);
@@ -183,3 +191,5 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     return apiError(error);
   }
 }
+
+

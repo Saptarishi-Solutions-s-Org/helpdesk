@@ -36,6 +36,20 @@
       "when": 1781157484810,
       "tag": "0004_simple_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781165762656,
+      "tag": "0005_lovely_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781167724158,
+      "tag": "0006_fancy_lockheed",
+      "breakpoints": true
     }
   ]
 }

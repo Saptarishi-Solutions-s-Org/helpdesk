@@ -52,6 +52,16 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "ISSUE_CLOSED",
   "ISSUE_REOPENED",
 ]);
+export const internalTicketStatusEnum = pgEnum("internal_ticket_status", [
+  "NEW",
+  "ACCEPTED",
+  "DEV_IN_PROGRESS",
+  "DEV_REVIEW",
+  "READY_FOR_QA",
+  "QA_IN_PROGRESS",
+  "READY_FOR_PRODUCTION",
+  "REOPENED",
+]);
 
 export const organizations = pgTable(
   "organizations",
@@ -271,6 +281,92 @@ export const issueActivity = pgTable("issue_activity", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+
+export const internalTickets = pgTable(
+  "internal_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketNo: varchar("ticket_no", { length: 64 }).notNull(),
+    parentIssueId: uuid("parent_issue_id").notNull().references(() => issues.id),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").references(() => projects.id),
+    moduleId: uuid("module_id").references(() => modules.id),
+    type: issueTypeEnum("type"),
+    priority: issuePriorityEnum("priority"),
+    status: internalTicketStatusEnum("status").notNull().default("NEW"),
+    title: varchar("title", { length: 220 }).notNull(),
+    description: text("description").notNull(),
+    descriptionJson: jsonb("description_json"),
+    assignedDeveloperId: uuid("assigned_developer_id").references(() => users.id),
+    assignedQaId: uuid("assigned_qa_id").references(() => users.id),
+    assignedAdminId: uuid("assigned_admin_id").references(() => users.id),
+    previousDeveloperId: uuid("previous_developer_id").references(() => users.id),
+    createdById: uuid("created_by_id").notNull().references(() => users.id),
+    acceptedAt: timestamp("accepted_at"),
+    devStartedAt: timestamp("dev_started_at"),
+    readyForQaAt: timestamp("ready_for_qa_at"),
+    qaStartedAt: timestamp("qa_started_at"),
+    readyForProductionAt: timestamp("ready_for_production_at"),
+    reopenedAt: timestamp("reopened_at"),
+    closedAt: timestamp("closed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketUnique: uniqueIndex("internal_tickets_ticket_no_unique").on(table.ticketNo),
+    parentUnique: uniqueIndex("internal_tickets_parent_issue_unique").on(table.parentIssueId),
+    statusIdx: index("internal_tickets_status_idx").on(table.status),
+    developerIdx: index("internal_tickets_developer_idx").on(table.assignedDeveloperId),
+    qaIdx: index("internal_tickets_qa_idx").on(table.assignedQaId),
+    adminIdx: index("internal_tickets_admin_idx").on(table.assignedAdminId),
+  }),
+);
+
+export const internalTicketComments = pgTable("internal_ticket_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  internalTicketId: uuid("internal_ticket_id").notNull().references(() => internalTickets.id),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  bodyJson: jsonb("body_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const internalTicketStatusHistory = pgTable("internal_ticket_status_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  internalTicketId: uuid("internal_ticket_id").notNull().references(() => internalTickets.id),
+  actorId: uuid("actor_id").notNull().references(() => users.id),
+  fromStatus: internalTicketStatusEnum("from_status"),
+  toStatus: internalTicketStatusEnum("to_status").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const internalTicketActivity = pgTable("internal_ticket_activity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  internalTicketId: uuid("internal_ticket_id").notNull().references(() => internalTickets.id),
+  actorId: uuid("actor_id").references(() => users.id),
+  type: varchar("type", { length: 60 }).notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const internalTicketWorklogs = pgTable("internal_ticket_worklogs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  internalTicketId: uuid("internal_ticket_id").notNull().references(() => internalTickets.id),
+  developerId: uuid("developer_id").references(() => users.id),
+  workerId: uuid("worker_id").references(() => users.id),
+  workerRole: varchar("worker_role", { length: 30 }).notNull().default("DEVELOPER"),
+  stopReason: text("stop_reason"),
+  startedAt: timestamp("started_at").notNull(),
+  stoppedAt: timestamp("stopped_at"),
+  durationMinutes: integer("duration_minutes"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   recipientId: uuid("recipient_id").notNull().references(() => users.id),
@@ -282,3 +378,4 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+

@@ -189,6 +189,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingTriage, setIsSavingTriage] = useState(false);
+  const [isCloningInternal, setIsCloningInternal] = useState(false);
 
   useRealtime(["issues", "issue_comments", "issue_attachments", "issue_status_history", "issue_activity"], () => {
     void mutate();
@@ -215,6 +216,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
   const selectedPriority = priority || currentIssue.priority || "";
   const attachments: AttachmentRow[] = data.attachments ?? [];
   const activities: ActivityRow[] = data.activity ?? [];
+  const internalTicket = data.internalTicket as { id: string; ticketNo: string; status: string } | null | undefined;
   const projectOptions: OptionRow[] = projectData?.linkedProjects ?? [];
   const modules = (moduleData?.modules ?? []).filter((item: OptionRow) => !selectedProjectId || item.projectId === selectedProjectId);
   const hasTriageChanges =
@@ -404,6 +406,26 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
     }
   }
 
+
+  async function cloneToInternal() {
+    if (internalTicket) {
+      router.push(`/dashboard/internal-tickets/${internalTicket.ticketNo}`);
+      return;
+    }
+    setIsCloningInternal(true);
+    try {
+      const res = await fetch(`/api/issues/${currentIssue.id}/clone-internal`, { method: "POST" });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(result.message || "Unable to clone internal ticket");
+        return;
+      }
+      toast.success(result.message || "Internal ticket ready");
+      router.push(`/dashboard/internal-tickets/${result.ticket.ticketNo}`);
+    } finally {
+      setIsCloningInternal(false);
+    }
+  }
   async function reopen() {
     const res = await fetch(`/api/issues/${currentIssue.id}/reopen`, {
       method: "POST",
@@ -439,6 +461,12 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
             </div>
 
             <div className="flex flex-wrap gap-2">
+              {role === "ADMIN" ? (
+                <Button variant="outline" size="sm" onClick={cloneToInternal} disabled={isCloningInternal}>
+                  <ExternalLink className="h-4 w-4" />
+                  {internalTicket ? `Open ${internalTicket.ticketNo}` : isCloningInternal ? "Cloning..." : "Clone to Internal"}
+                </Button>
+              ) : null}
               {canMutate ? (
                 <Button variant="outline" size="sm" onClick={openEdit}>
                   <Pencil className="h-4 w-4" />
@@ -447,10 +475,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
               ) : null}
               {role === "ADMIN" ? (
                 <div className="flex min-w-[260px] gap-2">
-                  <Select
-                    value={selectedStatus}
-                    onValueChange={(value) => setStatusDraft({ issueStatus: currentIssue.status, value })}
-                  >
+                  <Select value={selectedStatus} onValueChange={(value) => setStatusDraft({ issueStatus: currentIssue.status, value })}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>{statusOptions.map((item) => <SelectItem key={item} value={item}>{formatStatus(item)}</SelectItem>)}</SelectContent>
                   </Select>
@@ -757,4 +782,3 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
     </main>
   );
 }
-

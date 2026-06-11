@@ -42,3 +42,18 @@ drop trigger if exists set_issue_comments_updated_at on public.issue_comments;
 create trigger set_issue_comments_updated_at
 before update on public.issue_comments
 for each row execute function public.set_updated_at();
+
+drop trigger if exists set_internal_tickets_updated_at on public.internal_tickets;
+create trigger set_internal_tickets_updated_at
+before update on public.internal_tickets
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_internal_ticket_comments_updated_at on public.internal_ticket_comments;
+create trigger set_internal_ticket_comments_updated_at
+before update on public.internal_ticket_comments
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_internal_ticket_worklogs_updated_at on public.internal_ticket_worklogs;
+create trigger set_internal_ticket_worklogs_updated_at
+before update on public.internal_ticket_worklogs
+for each row execute function public.set_updated_at();
