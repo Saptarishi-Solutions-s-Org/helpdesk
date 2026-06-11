@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, MoreHorizontal, UserPlus } from "lucide-react";
+import { ArrowLeft, MoreHorizontal, UserPlus } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -16,6 +16,7 @@ import {
 import TablePaginationFooter from "@/components/commoncomponents/table-pagination-footer";
 import { TableStateRow } from "@/components/commoncomponents/table-state-row";
 import GlobalLoader from "@/components/commoncomponents/globalloader";
+import { NotFoundCard } from "@/components/commoncomponents/not-found-card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -211,23 +212,12 @@ export default function OrganizationUsersPage() {
 
   if (!organization) {
     return (
-      <main className="flex min-h-full items-center justify-center bg-white p-6">
-        <div className="w-full max-w-md rounded-lg border bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500">
-            <AlertTriangle className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-semibold text-gray-900">Organization not found</h1>
-          <p className="mt-2 text-sm text-gray-500">
-            The organization code does not match any configured organization.
-          </p>
-          <Button
-            className="mt-6 rounded-full bg-blue-600 px-6 text-white hover:bg-blue-700"
-            onClick={() => router.push("/dashboard/admin/organizations")}
-          >
-            Back to Organizations
-          </Button>
-        </div>
-      </main>
+      <NotFoundCard
+        title="Organization not found"
+        description="The organization code does not match any configured organization."
+        actionHref="/dashboard/admin/organizations"
+        actionLabel="Back to Organizations"
+      />
     );
   }
 

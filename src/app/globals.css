@@ -79,9 +79,15 @@
   border-radius: 999px;
 }
 
+
 .thin-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 4px;
+  width: 2px;
+  height: 2px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #7677f4;
+  border-radius: 999px;
 }
 
 .breath {

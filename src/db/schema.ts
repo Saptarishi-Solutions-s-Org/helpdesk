@@ -28,8 +28,12 @@ export const issuePriorityEnum = pgEnum("issue_priority", [
 export const issueStatusEnum = pgEnum("issue_status", [
   "OPEN",
   "TRIAGED",
+  "WAITING_FOR_SUPPORT",
+  "BACKLOG",
+  "IN_ANALYSIS",
   "IN_PROGRESS",
   "WAITING_FROM_CLIENT",
+  "QUEUED_FOR_RELEASE",
   "RESOLVED",
   "CLOSED",
   "REOPENED",
@@ -139,44 +143,44 @@ export const projects = pgTable(
   }),
 );
 
-export const organizationProjects = pgTable(
-  "organization_projects",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    projectId: uuid("project_id").notNull().references(() => projects.id),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    organizationProjectUnique: uniqueIndex("organization_projects_org_project_unique").on(
-      table.organizationId,
-      table.projectId,
-    ),
-    organizationIdx: index("organization_projects_organization_idx").on(table.organizationId),
-    projectIdx: index("organization_projects_project_idx").on(table.projectId),
-  }),
-);
-
-export const ticketSequences = pgTable(
-  "ticket_sequences",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    projectId: uuid("project_id").references(() => projects.id),
-    projectSegment: varchar("project_segment", { length: 3 }).notNull(),
-    lastNumber: integer("last_number").notNull().default(0),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    scopeUnique: uniqueIndex("ticket_sequences_scope_unique").on(
-      table.organizationId,
-      table.projectSegment,
-    ),
-  }),
-);
-
+export const organizationProjects = pgTable(
+  "organization_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    organizationProjectUnique: uniqueIndex("organization_projects_org_project_unique").on(
+      table.organizationId,
+      table.projectId,
+    ),
+    organizationIdx: index("organization_projects_organization_idx").on(table.organizationId),
+    projectIdx: index("organization_projects_project_idx").on(table.projectId),
+  }),
+);
+
+export const ticketSequences = pgTable(
+  "ticket_sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").references(() => projects.id),
+    projectSegment: varchar("project_segment", { length: 3 }).notNull(),
+    lastNumber: integer("last_number").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    scopeUnique: uniqueIndex("ticket_sequences_scope_unique").on(
+      table.organizationId,
+      table.projectSegment,
+    ),
+  }),
+);
+
 export const modules = pgTable(
   "modules",
   {
@@ -208,7 +212,7 @@ export const issues = pgTable(
     moduleId: uuid("module_id").references(() => modules.id),
     type: issueTypeEnum("type"),
     priority: issuePriorityEnum("priority"),
-    status: issueStatusEnum("status").notNull().default("OPEN"),
+    status: issueStatusEnum("status").notNull().default("WAITING_FOR_SUPPORT"),
     title: varchar("title", { length: 220 }).notNull(),
     description: text("description").notNull(),
     descriptionJson: jsonb("description_json"),

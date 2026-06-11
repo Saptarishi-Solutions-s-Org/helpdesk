@@ -31,8 +31,12 @@ type IssueRow = {
 const statusClassName: Record<string, string> = {
   OPEN: "border-blue-100 bg-blue-50 text-blue-700",
   TRIAGED: "border-indigo-100 bg-indigo-50 text-indigo-700",
+  WAITING_FOR_SUPPORT: "border-sky-100 bg-sky-50 text-sky-700",
+  BACKLOG: "border-indigo-100 bg-indigo-50 text-indigo-700",
+  IN_ANALYSIS: "border-purple-100 bg-purple-50 text-purple-700",
   IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
   WAITING_FROM_CLIENT: "border-amber-100 bg-amber-50 text-amber-700",
+  QUEUED_FOR_RELEASE: "border-cyan-100 bg-cyan-50 text-cyan-700",
   RESOLVED: "border-emerald-100 bg-emerald-50 text-emerald-700",
   CLOSED: "border-slate-200 bg-slate-50 text-slate-600",
   REOPENED: "border-red-100 bg-red-50 text-red-700",
@@ -102,3 +106,5 @@ export function IssuesTable({ view }: { view?: "open" | "closed" }) {
     </div>
   );
 }
+
+

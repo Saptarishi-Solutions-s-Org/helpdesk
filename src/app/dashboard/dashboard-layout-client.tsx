@@ -17,6 +17,7 @@ import {
   Home,
   LogOut,
   Ticket,
+  UsersRound,
 } from "lucide-react";
 import { LogoutConfirmationDialog } from "@/components/commoncomponents/logout-confirmation-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -52,7 +53,7 @@ type SessionPayload = {
     id: string;
     name: string;
     email: string;
-    role: "ADMIN" | "CLIENT";
+    role: "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST";
   } | null;
 };
 
@@ -92,6 +93,7 @@ const adminLinks = [
   { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard/admin/modules", label: "Modules", icon: Boxes },
+  { href: "/dashboard/admin/internal-team", label: "Internal Team", icon: UsersRound },
 ];
 
 function SidebarBrand() {

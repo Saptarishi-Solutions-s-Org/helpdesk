@@ -15,7 +15,7 @@ export type SessionUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "CLIENT";
+  role: "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST";
   organizationId: string | null;
   sessionVersion: number;
 };
@@ -93,7 +93,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       id: current.id,
       name: current.name,
       email: current.email,
-      role: current.role as "ADMIN" | "CLIENT",
+      role: current.role as "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST",
       organizationId: current.organizationId,
       sessionVersion: current.sessionVersion,
     };

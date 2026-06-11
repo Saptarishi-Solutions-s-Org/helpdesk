@@ -3,9 +3,10 @@
 import { FormEvent, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { ExternalLink, Pencil, Paperclip, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { ExternalLink, Pencil, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import GlobalLoader from "@/components/commoncomponents/globalloader";
+import { NotFoundCard } from "@/components/commoncomponents/not-found-card";
 import { RichEditor } from "@/components/rich-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ import { toIST } from "@/lib/time";
 import { formatStatus } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
-const statuses = ["OPEN", "TRIAGED", "IN_PROGRESS", "WAITING_FROM_CLIENT", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"];
+const workflowStatuses = ["WAITING_FOR_SUPPORT", "BACKLOG", "IN_ANALYSIS", "IN_PROGRESS", "WAITING_FROM_CLIENT", "QUEUED_FOR_RELEASE", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"];
+const legacyStatuses = ["OPEN", "TRIAGED"];
 const issueTypes = ["BUG", "CR", "ISSUE", "SERVICE_REQUEST"];
 const priorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL", "BLOCKER"];
 
@@ -65,8 +67,12 @@ type Issue = {
 const statusClassName: Record<string, string> = {
   OPEN: "border-blue-100 bg-blue-50 text-blue-700",
   TRIAGED: "border-indigo-100 bg-indigo-50 text-indigo-700",
+  WAITING_FOR_SUPPORT: "border-sky-100 bg-sky-50 text-sky-700",
+  BACKLOG: "border-indigo-100 bg-indigo-50 text-indigo-700",
+  IN_ANALYSIS: "border-purple-100 bg-purple-50 text-purple-700",
   IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
   WAITING_FROM_CLIENT: "border-amber-100 bg-amber-50 text-amber-700",
+  QUEUED_FOR_RELEASE: "border-cyan-100 bg-cyan-50 text-cyan-700",
   RESOLVED: "border-emerald-100 bg-emerald-50 text-emerald-700",
   CLOSED: "border-slate-200 bg-slate-50 text-slate-600",
   REOPENED: "border-red-100 bg-red-50 text-red-700",
@@ -153,7 +159,7 @@ function renderCommentBody(body: string, mentions: Array<{ id: string; name: str
   }, body);
 }
 
-export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "CLIENT" }) {
+export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST" }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -163,7 +169,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
   const { data: projectData } = useSWR(role === "ADMIN" && data?.issue?.organizationId ? `/api/admin/organizations/${data.issue.organizationId}/projects` : null, fetcher);
   const { data: moduleData } = useSWR(role === "ADMIN" ? "/api/admin/modules" : null, fetcher);
   const issue: Issue | undefined = data?.issue;
-  const viewer = data?.viewer as { id: string; role: "ADMIN" | "CLIENT" } | undefined;
+  const viewer = data?.viewer as { id: string; role: "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST" } | undefined;
   const [statusDraft, setStatusDraft] = useState<{ issueStatus: string; value: string } | null>(null);
   const [projectId, setProjectId] = useState("");
   const [moduleId, setModuleId] = useState("");
@@ -178,8 +184,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editAttachmentUrl, setEditAttachmentUrl] = useState("");
-  const [editAttachmentLabel, setEditAttachmentLabel] = useState("");
+  const [editAttachments, setEditAttachments] = useState<Array<{ url: string; label: string }>>([{ url: "", label: "" }]);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
@@ -189,11 +194,23 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
     void mutate();
   });
 
-  if (!issue) return <GlobalLoader />;
-  const currentIssue = issue;
+  if (!data && !issue) return <GlobalLoader />;
+  if (data && !issue) {
+    return (
+      <NotFoundCard
+        title="Ticket not found"
+        description="The ticket number does not match any support ticket you can access."
+        actionHref="/dashboard/issues"
+        actionLabel="Back to Issues"
+      />
+    );
+  }
+  const currentIssue = issue as Issue;
+  const canMutate = role === "ADMIN" || role === "CLIENT";
+  const statusOptions = legacyStatuses.includes(currentIssue.status) ? [currentIssue.status, ...workflowStatuses] : workflowStatuses;
   const selectedStatus = statusDraft?.issueStatus === currentIssue.status ? statusDraft.value : currentIssue.status;
   const selectedProjectId = projectId || currentIssue.projectId || "";
-  const selectedModuleId = moduleId || currentIssue.moduleId || "";
+  const selectedModuleId = projectId && projectId !== (currentIssue.projectId || "") ? moduleId : moduleId || currentIssue.moduleId || "";
   const selectedType = type || currentIssue.type || "";
   const selectedPriority = priority || currentIssue.priority || "";
   const attachments: AttachmentRow[] = data.attachments ?? [];
@@ -252,8 +269,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
   const openEdit = () => {
     setEditTitle(currentIssue.title);
     setEditDescription(currentIssue.description);
-    setEditAttachmentUrl("");
-    setEditAttachmentLabel("");
+    setEditAttachments([{ url: "", label: "" }]);
     setEditOpen(true);
   };
 
@@ -266,8 +282,9 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
         body: JSON.stringify({
           title: editTitle,
           description: editDescription,
-          attachmentUrl: editAttachmentUrl,
-          attachmentLabel: editAttachmentLabel,
+          attachments: editAttachments
+            .filter((attachment) => attachment.url.trim())
+            .map((attachment) => ({ url: attachment.url.trim(), label: attachment.label.trim() || undefined })),
         }),
       });
       const result = await res.json().catch(() => ({}));
@@ -371,7 +388,12 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
       const res = await fetch(`/api/issues/${currentIssue.id}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProjectId, moduleId: selectedModuleId, type: selectedType, priority: selectedPriority }),
+        body: JSON.stringify({
+          projectId: projectId || undefined,
+          moduleId: moduleId || undefined,
+          type: type || undefined,
+          priority: priority || undefined,
+        }),
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) return toast.error(result.message || "Unable to save triage");
@@ -417,7 +439,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {role === "CLIENT" ? (
+              {canMutate ? (
                 <Button variant="outline" size="sm" onClick={openEdit}>
                   <Pencil className="h-4 w-4" />
                   Edit
@@ -430,7 +452,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
                     onValueChange={(value) => setStatusDraft({ issueStatus: currentIssue.status, value })}
                   >
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>{statuses.map((item) => <SelectItem key={item} value={item}>{formatStatus(item)}</SelectItem>)}</SelectContent>
+                    <SelectContent>{statusOptions.map((item) => <SelectItem key={item} value={item}>{formatStatus(item)}</SelectItem>)}</SelectContent>
                   </Select>
                   <Button onClick={changeStatus} disabled={isSavingStatus || selectedStatus === currentIssue.status} className="bg-blue-600 text-white hover:bg-blue-700">
                     {isSavingStatus ? "Saving..." : "Update"}
@@ -445,36 +467,36 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
           <section className="rounded-lg border bg-white p-4 shadow-sm">
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
-                <Label required className="mb-1">Type</Label>
+                <Label className="mb-1">Type</Label>
                 <Select value={selectedType} onValueChange={setType}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>{issueTypes.map((item) => <SelectItem key={item} value={item}>{displayEnum(item)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label required className="mb-1">Priority</Label>
+                <Label className="mb-1">Priority</Label>
                 <Select value={selectedPriority} onValueChange={setPriority}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select priority" /></SelectTrigger>
                   <SelectContent>{priorities.map((item) => <SelectItem key={item} value={item}>{displayEnum(item)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label required className="mb-1">Project</Label>
+                <Label className="mb-1">Project</Label>
                 <Select value={selectedProjectId} onValueChange={(value) => { setProjectId(value); setModuleId(""); }}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>{projectOptions.map((project: OptionRow) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label required className="mb-1">Module</Label>
+                <Label className="mb-1">Module</Label>
                 <Select value={selectedModuleId} onValueChange={setModuleId}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select module" /></SelectTrigger>
                   <SelectContent>{modules.map((module: OptionRow) => <SelectItem key={module.id} value={module.id}>{module.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="flex items-end">
-                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" disabled={isSavingTriage || !selectedProjectId || !selectedModuleId || !selectedType || !selectedPriority || !hasTriageChanges} onClick={saveTriage}>
-                  {isSavingTriage ? "Saving..." : "Save Triage"}
+                <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" disabled={isSavingTriage || !hasTriageChanges} onClick={saveTriage}>
+                  {isSavingTriage ? "Saving..." : "Save Assignment"}
                 </Button>
               </div>
             </div>
@@ -487,7 +509,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
               <CardContent className="min-w-0 p-5">
                 <h2 className="mb-3 text-base font-semibold text-gray-900">Description</h2>
                 <div
-                  className="prose prose-sm max-w-none overflow-hidden break-words text-sm leading-6 text-gray-700 [&_*]:max-w-full [&_*]:break-words [overflow-wrap:anywhere] [&_*]:[overflow-wrap:anywhere] [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
+                  className="thin-scrollbar prose prose-sm max-h-80 max-w-none overflow-y-auto overflow-x-hidden break-words pr-2 text-sm leading-6 text-gray-700 [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:break-words [&_*]:[overflow-wrap:anywhere] [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
                   dangerouslySetInnerHTML={{ __html: currentIssue.description }}
                 />
               </CardContent>
@@ -519,7 +541,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
                 <FieldValue label="Last Updated" value={toIST(currentIssue.updatedAt)} />
               </CardContent>
             </Card>
-            {["RESOLVED", "CLOSED"].includes(currentIssue.status) ? (
+            {canMutate && ["RESOLVED", "CLOSED"].includes(currentIssue.status) ? (
               <Button variant="outline" className="w-full rounded-full" onClick={reopen}>
                 <RotateCcw className="h-4 w-4" />
                 Reopen issue
@@ -582,6 +604,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
                     </div>
                   );
                 })}
+                {canMutate ? (
                 <form onSubmit={postComment} className="space-y-3">
                   <Label>Add comment</Label>
                   <div className="relative">
@@ -618,6 +641,7 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
                   </div>
                   <Button className="bg-blue-600 text-white hover:bg-blue-700"><Send className="h-4 w-4" />Comment</Button>
                 </form>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -684,13 +708,44 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
                 </div>
               </div>
             ) : null}
-            <div>
-              <Label className="mb-1">Add Attachment Link</Label>
-              <Input placeholder="Paste Jam, Lightshot, Drive, or reference link" value={editAttachmentUrl} onChange={(event) => setEditAttachmentUrl(event.target.value)} />
-            </div>
-            <div>
-              <Label className="mb-1">Attachment Label</Label>
-              <Input placeholder="Example: Login screen recording" value={editAttachmentLabel} onChange={(event) => setEditAttachmentLabel(event.target.value)} />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="mb-1">Add Attachment Links</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditAttachments((items) => [...items, { url: "", label: "" }])}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
+              {editAttachments.map((attachment, index) => (
+                <div key={index} className="grid gap-2 rounded-lg border bg-slate-50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <Input
+                    placeholder="Paste Jam, Lightshot, Drive, or reference link"
+                    value={attachment.url}
+                    onChange={(event) => setEditAttachments((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))}
+                  />
+                  <Input
+                    placeholder="Label"
+                    value={attachment.label}
+                    onChange={(event) => setEditAttachments((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    disabled={editAttachments.length === 1}
+                    onClick={() => setEditAttachments((items) => items.filter((_, itemIndex) => itemIndex !== index))}
+                    aria-label="Remove attachment row"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -702,3 +757,4 @@ export function IssueDetailClient({ id, role }: { id: string; role: "ADMIN" | "C
     </main>
   );
 }
+

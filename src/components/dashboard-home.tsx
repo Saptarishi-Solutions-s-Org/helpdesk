@@ -10,12 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export function DashboardHome({ showRaiseIssue = false }: { showRaiseIssue?: boolean }) {
+export function DashboardHome({ role }: { role: "ADMIN" | "CLIENT" | "DEVELOPER" | "QUALITY ANALYST" }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") === "closed" ? "closed" : "open";
   const { data, mutate } = useSWR("/api/issues", fetcher, { refreshInterval: 15000 });
+  const canCreateIssue = role === "ADMIN" || role === "CLIENT";
   const stats = data?.stats ?? { total: 0, open: 0, waiting: 0, closed: 0, reopened: 0 };
 
   useRealtime(["issues", "issue_comments", "issue_status_history"], () => {
@@ -34,17 +35,17 @@ export function DashboardHome({ showRaiseIssue = false }: { showRaiseIssue?: boo
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Issue Center</h1>
           <p className="text-sm text-muted-foreground">
-            {showRaiseIssue
+            {role === "CLIENT"
               ? "Track support issues raised by your organization. You can comment and update ticket details from the issue page."
               : "Track opened and closed support issues across organizations."}
           </p>
         </div>
-        {showRaiseIssue ? <NewIssueForm onCreated={() => void mutate()} /> : null}
+        {canCreateIssue ? <NewIssueForm role={role === "ADMIN" ? "ADMIN" : "CLIENT"} onCreated={() => void mutate()} /> : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Open" value={stats.open} tone="text-blue-700" />
-        <StatCard label="Waiting" value={stats.waiting} tone="text-amber-700" />
+        <StatCard label="Waiting From Client" value={stats.waiting} tone="text-amber-700" />
         <StatCard label="Closed" value={stats.closed} tone="text-emerald-700" />
         <StatCard label="Reopened" value={stats.reopened} tone="text-red-700" />
       </div>

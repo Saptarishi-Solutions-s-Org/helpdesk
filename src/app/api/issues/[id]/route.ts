@@ -4,7 +4,7 @@ import { apiError, ok } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notifyIssueWatchers } from "@/lib/notifications";
-import { createIssueSchema } from "@/lib/validators/issue";
+import { attachmentLinkSchema, createIssueSchema } from "@/lib/validators/issue";
 
 const issueLookupFor = (id: string) => {
   const value = decodeURIComponent(id).trim();
@@ -107,7 +107,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     const current = (await db.select().from(issues).where(issueLookupFor(id)).limit(1))[0];
     if (!current) return ok({ message: "Not found" }, 404);
-    if (session.role !== "CLIENT" || current.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
+    if (session.role === "CLIENT" && current.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const changes: Array<{ field: string; from: string; to: string }> = [];
     if (current.title !== parsed.data.title) {
@@ -135,14 +136,26 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       metadata: change,
     }));
 
-    if (body.attachmentUrl) {
+    const attachmentPayloads = Array.isArray(body.attachments)
+      ? body.attachments
+      : body.attachmentUrl
+        ? [{ url: body.attachmentUrl, label: body.attachmentLabel }]
+        : [];
+
+    for (const item of attachmentPayloads) {
+      if (!item?.url?.trim()) continue;
+      const parsedAttachment = attachmentLinkSchema.safeParse(item);
+      if (!parsedAttachment.success) {
+        return ok({ message: parsedAttachment.error.issues[0]?.message ?? "Invalid attachment link" }, 400);
+      }
+      const attachment = parsedAttachment.data;
       await db.insert(issueAttachments).values({
         issueId: current.id,
         uploadedById: session.id,
-        url: body.attachmentUrl,
-        publicId: body.attachmentUrl,
+        url: attachment.url,
+        publicId: attachment.url,
         resourceType: "file",
-        fileName: body.attachmentLabel || body.attachmentUrl,
+        fileName: attachment.label || attachment.url,
         sizeBytes: 0,
       });
       activityRows.push({
@@ -150,7 +163,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         actorId: session.id,
         type: "ISSUE_UPDATED",
         message: "Attachment added",
-        metadata: { field: "Attachment", from: "", to: body.attachmentLabel || body.attachmentUrl },
+        metadata: { field: "Attachment", from: "", to: attachment.label || attachment.url },
       });
     }
 

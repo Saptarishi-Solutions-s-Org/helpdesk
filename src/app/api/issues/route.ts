@@ -1,11 +1,11 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { issueActivity, issueStatusHistory, issues, modules, organizationProjects, organizations, projects, users } from "@/db/schema";
+import { issueActivity, issueAttachments, issueStatusHistory, issues, modules, organizationProjects, organizations, projects, roles, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { nextTicketNo, openStatuses, PENDING_PROJECT_SEGMENT } from "@/lib/issues";
+import { nextTicketNo, openStatuses } from "@/lib/issues";
 import { notifyIssueWatchers } from "@/lib/notifications";
-import { createIssueSchema } from "@/lib/validators/issue";
+import { attachmentLinkSchema, createIssueSchema } from "@/lib/validators/issue";
 
 export async function GET(req: Request) {
   try {
@@ -61,6 +61,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await requireUser();
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
     if (!session.organizationId && session.role === "CLIENT") throw new Error("FORBIDDEN");
     const body = await req.json();
     const parsed = createIssueSchema.safeParse(body);
@@ -80,8 +81,21 @@ export async function POST(req: Request) {
       .limit(1);
     if (!organization) return ok({ message: "Organization not found" }, 404);
 
+    const reporterId = session.role === "ADMIN" ? body.reporterId : session.id;
+    if (!reporterId) return ok({ message: "Reported by client is required" }, 400);
+
+    const [reporter] = await db
+      .select({ id: users.id, organizationId: users.organizationId, roleName: roles.roleName, status: users.status })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.id, reporterId))
+      .limit(1);
+    if (!reporter || reporter.organizationId !== orgId || reporter.roleName !== "CLIENT" || reporter.status !== "ACTIVE") {
+      return ok({ message: "Select an active client from the selected organization" }, 400);
+    }
+
     const linkedProjects = await db
-      .select({ id: projects.id, shortCode: projects.shortCode })
+      .select({ id: projects.id })
       .from(organizationProjects)
       .innerJoin(projects, eq(organizationProjects.projectId, projects.id))
       .where(and(eq(organizationProjects.organizationId, orgId), eq(projects.isActive, true)))
@@ -92,36 +106,62 @@ export async function POST(req: Request) {
     }
 
     const assignedProject = linkedProjects.length === 1 ? linkedProjects[0] : null;
-    const projectSegment = assignedProject?.shortCode ?? PENDING_PROJECT_SEGMENT;
+    const attachmentPayloads = Array.isArray(body.attachments)
+      ? body.attachments
+      : body.attachmentUrl
+        ? [{ url: body.attachmentUrl, label: body.attachmentLabel }]
+        : [];
+    const parsedAttachments: Array<{ url: string; label?: string }> = [];
+    for (const item of attachmentPayloads) {
+      if (!item?.url?.trim()) continue;
+      const parsedAttachment = attachmentLinkSchema.safeParse(item);
+      if (!parsedAttachment.success) {
+        return ok({ message: parsedAttachment.error.issues[0]?.message ?? "Invalid attachment link" }, 400);
+      }
+      parsedAttachments.push(parsedAttachment.data);
+    }
 
     const rows = await db.transaction(async (tx) => {
       const ticketNo = await nextTicketNo(tx, {
         organizationId: orgId,
-        projectId: assignedProject?.id ?? null,
         orgShortCode: organization.shortCode,
-        projectSegment,
       });
 
-      return tx
+      const inserted = await tx
         .insert(issues)
         .values({
           ticketNo,
           organizationId: orgId,
-          reporterId: session.id,
+          reporterId,
           projectId: assignedProject?.id ?? null,
           type: null,
           priority: null,
+          status: "WAITING_FOR_SUPPORT",
           title: parsed.data.title,
           description: parsed.data.description,
           descriptionJson: body.descriptionJson || null,
         })
         .returning();
+
+      if (parsedAttachments.length) {
+        await tx.insert(issueAttachments).values(parsedAttachments.map((attachment) => ({
+          issueId: inserted[0].id,
+          uploadedById: session.id,
+          url: attachment.url,
+          publicId: attachment.url,
+          resourceType: "file" as const,
+          fileName: attachment.label || attachment.url,
+          sizeBytes: 0,
+        })));
+      }
+
+      return inserted;
     });
 
     await db.insert(issueStatusHistory).values({
       issueId: rows[0].id,
       actorId: session.id,
-      toStatus: "OPEN",
+      toStatus: "WAITING_FOR_SUPPORT",
       reason: "Issue created",
     });
     await db.insert(issueActivity).values({
@@ -143,3 +183,4 @@ export async function POST(req: Request) {
     return apiError(error);
   }
 }
+

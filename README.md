@@ -2,10 +2,11 @@
 
 SRS Helpdesk is a Next.js support application for Saptarishi-style client support workflows. It uses the same ESS/HRMS visual language: sidebar shell, compact dashboard pages, shadcn-based controls, Poppins-style product UI, confirmation dialogs, realtime notifications, and audit-first issue handling.
 
-The application is designed around two roles:
+The application is designed around client support and internal support roles:
 
-- `ADMIN`: SRS/internal support user. Admins can see all organizations, configure support routing, triage issues, change statuses, and manage organizations/users/projects/modules.
+- `ADMIN`: SRS/internal support user. Admins can see all organizations, configure support routing, create tickets on behalf of clients, triage issues, change statuses, and manage organizations/users/projects/modules.
 - `CLIENT`: Client organization user. Clients can see issue activity for their own organization, raise new issues, update ticket details, add comments, reopen closed/resolved tickets, and collaborate on organization tickets.
+- `DEVELOPER` and `QUALITY ANALYST`: internal team users. These roles are currently read-only in the issue flow; deeper internal assignment/clone workflows are future work.
 
 ## How The System Works
 
@@ -46,7 +47,7 @@ Clients belong to an organization and role.
 Projects and modules are configured routing values. They are not free-text fields during triage.
 
 - Projects have generated codes like `SRSHD001`.
-- Projects also have a required 2-3 character `shortCode` used in ticket numbers. `PEN` is reserved for pending project assignment.
+- Projects also have a required 2-3 character `shortCode` for compact project identity and future internal workflows.
 - Projects must be linked to organizations before client tickets can be created or triaged against them.
 - Modules have generated codes like `SRSHDM001`.
 - Modules belong to projects.
@@ -55,24 +56,23 @@ Projects and modules are configured routing values. They are not free-text field
 
 ### Issues
 
-Clients raise issues from the Issues page. At creation time, the user only provides:
+Clients raise issues from the Issues page. Admins can also create issues on behalf of a client by selecting an organization first, then the reporting client. At creation time, the issue creator provides:
 
 - Title
 - Rich description
-- Optional attachment link and label
+- Optional attachment links and labels
 
 The client does not decide issue type or priority. Admin decides those during triage.
 
-Issue ticket numbers are generated server-side from organization and project short codes:
+Issue ticket numbers are generated server-side from the organization short code:
 
 ```text
-SHD-ORG-PRJ-1
-SHD-ORG-PRJ-2
-SHD-ORG-PEN-1
-SHD-ORG-PRJ-1000000
+SHD-ORG-1
+SHD-ORG-2
+SHD-ORG-1000000
 ```
 
-The numeric suffix is not padded and has no fixed upper limit. Sequences are scoped per organization + project segment. If an organization has exactly one linked active project, the issue is assigned to that project immediately. If an organization has multiple linked projects, the ticket uses the stable pending segment `PEN` until Admin triages it; the ticket number is not renamed. If no project is linked, issue creation is blocked with a contact-admin message.
+The numeric suffix is not padded and has no fixed upper limit. Sequences are scoped per organization. If an organization has exactly one linked active project, the issue is assigned to that project immediately. If an organization has multiple linked projects, Admin assigns the project during triage while the ticket number remains unchanged. If no project is linked, issue creation is blocked with a contact-admin message.
 
 ### Client Issue Scope
 
@@ -97,21 +97,30 @@ Admins can:
 - Comment.
 - View complete activity and status history.
 
-Admins do not use the client ticket-detail edit flow for changing user descriptions.
+Admins can edit ticket details and attachments when needed, but project/module/type/priority changes remain in the assignment section so history stays clear.
 
 ### Issue Statuses
 
 Supported statuses:
 
 ```text
-OPEN
-TRIAGED
+WAITING_FOR_SUPPORT
+BACKLOG
+IN_ANALYSIS
 IN_PROGRESS
 WAITING_FROM_CLIENT
+QUEUED_FOR_RELEASE
 RESOLVED
 CLOSED
 REOPENED
 CANCELLED
+```
+
+Legacy values still load for old records:
+
+```text
+OPEN
+TRIAGED
 ```
 
 The UI formats enum values into readable labels, for example `WAITING_FROM_CLIENT` becomes `Waiting From Client`.
@@ -123,6 +132,7 @@ Issue detail pages are built like a support/Jira-style ticket view.
 - Description and comments use rich text.
 - Comments support rich text and an optional attachment link.
 - Attachments are stored as links, not uploaded files.
+- Raise Issue and Edit Issue support multiple ticket-level attachment links.
 - Attachment links can point to Jam, Lightshot, Drive, or any team-accessible URL.
 - Ticket-level attachments can be added and removed from the edit dialog.
 - Comment attachments stay with the comment.
@@ -174,6 +184,7 @@ Notifications appear in the dashboard header menu and show realtime toasts for t
 - `/dashboard/admin/projects` - Project configuration.
 - `/dashboard/admin/modules` - Module configuration.
 - `/dashboard/admin/roles` - Role reference page.
+- `/dashboard/admin/internal-team` - Internal team user management for `DEVELOPER` and `QUALITY ANALYST`.
 
 ## API Surface
 
@@ -197,6 +208,7 @@ Notifications appear in the dashboard header menu and show realtime toasts for t
 - `/api/admin/organizations/[id]/projects/[projectId]`
 - `/api/admin/users`
 - `/api/admin/roles`
+- `/api/admin/internal-users`
 - `/api/admin/projects`
 - `/api/admin/projects/[id]`
 - `/api/admin/modules`
@@ -306,6 +318,8 @@ Apply migrations:
 npm run db:migrate
 ```
 
+After the status workflow update, apply the generated migration before running issue pages against an existing database; otherwise Postgres will reject new enum values such as `WAITING_FOR_SUPPORT`.
+
 Verification:
 
 ```bash
@@ -319,10 +333,12 @@ npm run build
 - Admin can create organizations.
 - Organization detail opens by organization code.
 - Admin can create organization clients.
+- Admin can create internal team users as `DEVELOPER` or `QUALITY ANALYST`.
 - Admin can link projects to organizations.
 - Invite and password reset emails use Microsoft Graph.
 - Clients can log in and see organization-wide overview and issue lists.
-- Clients can raise tickets with rich text and optional link attachments.
+- Clients can raise tickets with rich text and multiple optional link attachments.
+- Admin can raise tickets on behalf of selected active clients.
 - Admin can triage type, priority, project, and module.
 - Admin can change status.
 - Clients can comment and update organization tickets.

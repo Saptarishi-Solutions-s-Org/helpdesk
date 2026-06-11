@@ -22,6 +22,7 @@ export async function DELETE(
     const { id, attachmentId } = await context.params;
     const issue = (await db.select().from(issues).where(issueLookupFor(id)).limit(1))[0];
     if (!issue) return ok({ message: "Not found" }, 404);
+    if (!["ADMIN", "CLIENT"].includes(session.role)) throw new Error("FORBIDDEN");
     if (session.role === "CLIENT" && issue.organizationId !== session.organizationId) throw new Error("FORBIDDEN");
 
     const attachment = (await db
