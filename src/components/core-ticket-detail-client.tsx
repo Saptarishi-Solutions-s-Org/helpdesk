@@ -161,7 +161,11 @@ function canDeleteComment(role: Role, viewerId: string, authorId?: string) {
 }
 
 function statusOptionsFor(role: Role, ticket: Ticket, viewerId: string) {
-  if (ticket.type === "EPIC") return ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
+  if (ticket.type === "EPIC") {
+    const options = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
+    if (!options.includes(ticket.status)) options.unshift(ticket.status);
+    return options;
+  }
   if (role === "ADMIN") return ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];
   if (role === "DEVELOPER" && ticket.assignedDeveloperId === viewerId) return ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "REOPENED"];
   if (role === "QUALITY ANALYST" && ticket.assignedQaId === viewerId) return ["READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];

@@ -67,3 +67,11 @@ export const internalUserSchema = z.object({
   designation: z.string().trim().optional(),
   roleName: z.enum(["DEVELOPER", "QUALITY ANALYST"], { message: "Select an internal role." }),
 });
+
+export const internalUserUpdateSchema = z.object({
+  name: z.string().trim().min(2, "Name is required."),
+  email: z.string().trim().email("Enter a valid email."),
+  phone: z.string().trim().optional(),
+  designation: z.string().trim().optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]),
+});

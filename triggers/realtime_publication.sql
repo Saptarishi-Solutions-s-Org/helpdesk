@@ -24,7 +24,8 @@ declare
     'core_ticket_status_history',
     'core_ticket_activity',
     'core_ticket_worklogs',
-    'core_ticket_links'
+    'core_ticket_links',
+    'core_ticket_attachments'
   ];
 begin
   foreach realtime_table in array realtime_tables loop

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { coreTickets, coreTicketActivity, coreTicketStatusHistory, modules, projects, users } from "@/db/schema";
+import { coreTicketAttachments, coreTickets, coreTicketActivity, coreTicketStatusHistory, modules, projects, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -108,6 +108,35 @@ export async function POST(req: Request) {
 
     const ticketNo = await nextCoreTicketCode();
 
+    let resolvedEpicId = epicId;
+    let resolvedProjectId = projectId;
+    let resolvedModuleId = moduleId;
+
+    if (type === "SUBTASK" && parentTaskId) {
+      const [parent] = await db
+        .select({ epicId: coreTickets.epicId, projectId: coreTickets.projectId, moduleId: coreTickets.moduleId })
+        .from(coreTickets)
+        .where(eq(coreTickets.id, parentTaskId))
+        .limit(1);
+      if (parent) {
+        resolvedEpicId = parent.epicId;
+        if (!resolvedProjectId) resolvedProjectId = parent.projectId;
+        if (!resolvedModuleId) resolvedModuleId = parent.moduleId;
+      }
+    }
+
+    if (resolvedEpicId && !resolvedProjectId) {
+      const [epic] = await db
+        .select({ projectId: coreTickets.projectId, moduleId: coreTickets.moduleId })
+        .from(coreTickets)
+        .where(eq(coreTickets.id, resolvedEpicId))
+        .limit(1);
+      if (epic) {
+        if (!resolvedProjectId) resolvedProjectId = epic.projectId;
+        if (!resolvedModuleId) resolvedModuleId = epic.moduleId;
+      }
+    }
+
     const [ticket] = await db
       .insert(coreTickets)
       .values({
@@ -117,10 +146,11 @@ export async function POST(req: Request) {
         title,
         description,
         descriptionJson,
-        epicId: type === "SUBTASK" ? undefined : epicId,
+        epicId: resolvedEpicId,
         parentTaskId,
-        projectId,
-        moduleId,
+        projectId: resolvedProjectId,
+        moduleId: resolvedModuleId,
+        status: isEpicType(type) ? "OPEN" : "NEW",
         createdById: session.id,
       })
       .returning();
@@ -131,6 +161,20 @@ export async function POST(req: Request) {
       type: "ISSUE_CREATED",
       message: `Created ${type} ${ticketNo}`,
     });
+
+    const attachmentPayloads = Array.isArray(body.attachments) ? body.attachments : [];
+    for (const item of attachmentPayloads) {
+      if (!item?.url?.trim()) continue;
+      await db.insert(coreTicketAttachments).values({
+        coreTicketId: ticket.id,
+        uploadedById: session.id,
+        url: item.url,
+        publicId: item.url,
+        resourceType: "file",
+        fileName: item.label || item.url,
+        sizeBytes: 0,
+      });
+    }
 
     return ok({ ticket }, 201);
   } catch (error) {

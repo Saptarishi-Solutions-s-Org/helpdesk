@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Code2, Layers, Plus, RotateCcw, ShieldCheck, TicketCheck } from "lucide-react";
+import { Code2, Layers, Paperclip, Plus, RotateCcw, ShieldCheck, TicketCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import GlobalLoader from "@/components/commoncomponents/globalloader";
+import { RichEditor } from "@/components/rich-editor";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableStateRow } from "@/components/commoncomponents/table-state-row";
-import { Textarea } from "@/components/ui/textarea";
 import { useRealtime } from "@/hooks/useRealtime";
 import { toIST } from "@/lib/time";
 import { formatStatus } from "@/lib/utils";
@@ -92,9 +93,14 @@ type EpicRow = {
   title: string;
 };
 
+type AttachmentDraft = { url: string; label: string };
+const emptyAttachment = (): AttachmentDraft => ({ url: "", label: "" });
+
 export function CoreTicketsPage() {
+  const router = useRouter();
   const { data, isLoading, mutate } = useSWR("/api/core-tickets", fetcher, { refreshInterval: 15000 });
   const { data: epicsData } = useSWR("/api/core-tickets?type=epic", fetcher);
+  const { data: projectsData } = useSWR("/api/admin/projects", fetcher);
   const [createOpen, setCreateOpen] = useState(false);
   const [formType, setFormType] = useState("TASK");
   const [formTitle, setFormTitle] = useState("");
@@ -102,7 +108,9 @@ export function CoreTicketsPage() {
   const [formPriority, setFormPriority] = useState("");
   const [formEpicId, setFormEpicId] = useState("");
   const [formParentTaskId, setFormParentTaskId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [formProjectId, setFormProjectId] = useState("");
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([emptyAttachment()]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useRealtime(["core_tickets", "core_ticket_comments", "core_ticket_status_history", "core_ticket_worklogs"], () => {
     void mutate();
@@ -113,18 +121,38 @@ export function CoreTicketsPage() {
   const tickets: CoreTicketRow[] = data?.tickets ?? [];
   const stats = data?.stats ?? { total: 0, open: 0, epic: 0, dev: 0, qa: 0, ready: 0, done: 0 };
   const epics: EpicRow[] = epicsData?.tickets ?? [];
+  const projects: Array<{ id: string; name: string; code: string }> = projectsData?.projects ?? [];
 
   const showEpicField = formType !== "EPIC" && formType !== "SUBTASK";
   const showParentTaskField = formType === "SUBTASK";
 
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
-    if (!formTitle || !formDesc) {
+  const reset = () => {
+    setFormType("TASK");
+    setFormTitle("");
+    setFormDesc("");
+    setFormPriority("");
+    setFormEpicId("");
+    setFormParentTaskId("");
+    setFormProjectId("");
+    setAttachments([emptyAttachment()]);
+  };
+
+  const updateAttachment = (index: number, key: keyof AttachmentDraft, value: string) => {
+    setAttachments((current) => current.map((item, i) => i === index ? { ...item, [key]: value } : item));
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((current) => current.length === 1 ? [emptyAttachment()] : current.filter((_, i) => i !== index));
+  };
+
+  async function handleCreate() {
+    if (!formTitle.trim() || !formDesc.trim()) {
       toast.error("Title and description are required");
       return;
     }
-    setSubmitting(true);
+    setIsSubmitting(true);
     try {
+      const cleanAttachments = attachments.filter((a) => a.url.trim());
       const res = await fetch("/api/core-tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,25 +163,21 @@ export function CoreTicketsPage() {
           description: formDesc,
           epicId: showEpicField ? formEpicId || null : undefined,
           parentTaskId: showParentTaskField ? formParentTaskId || null : undefined,
+          projectId: formProjectId || null,
+          attachments: cleanAttachments,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Failed to create");
-      }
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(result.message || "Failed to create"); return; }
       toast.success(`${formType} created successfully`);
       setCreateOpen(false);
-      setFormType("TASK");
-      setFormTitle("");
-      setFormDesc("");
-      setFormPriority("");
-      setFormEpicId("");
-      setFormParentTaskId("");
+      reset();
       void mutate();
+      router.push(`/dashboard/core-tickets/${result.ticket.ticketNo}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -165,99 +189,138 @@ export function CoreTicketsPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Core Tickets</h1>
             <p className="text-sm text-muted-foreground">Internal dev/QA workflow tickets.</p>
           </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) reset(); }}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="w-full rounded-full bg-blue-600 px-6 text-white hover:bg-blue-700 sm:w-auto">
                 <Plus className="h-4 w-4" />
                 New Ticket
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
+            <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create Core Ticket</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={formType} onValueChange={setFormType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TASK">Task</SelectItem>
-                      <SelectItem value="SUBTASK">Sub Task</SelectItem>
-                      <SelectItem value="IMPROVEMENT">Improvement</SelectItem>
-                      <SelectItem value="FEATURE">Feature</SelectItem>
-                      <SelectItem value="DOCUMENTATION">Documentation</SelectItem>
-                      <SelectItem value="EPIC">Epic</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={formPriority} onValueChange={setFormPriority}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
-                      <SelectItem value="CRITICAL">Critical</SelectItem>
-                      <SelectItem value="BLOCKER">Blocker</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4 py-2">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label required className="mb-1">Type</Label>
+                    <Select value={formType} onValueChange={setFormType}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TASK">Task</SelectItem>
+                        <SelectItem value="SUBTASK">Sub Task</SelectItem>
+                        <SelectItem value="IMPROVEMENT">Improvement</SelectItem>
+                        <SelectItem value="FEATURE">Feature</SelectItem>
+                        <SelectItem value="DOCUMENTATION">Documentation</SelectItem>
+                        <SelectItem value="EPIC">Epic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="mb-1">Priority</Label>
+                    <Select value={formPriority} onValueChange={setFormPriority}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select priority" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="CRITICAL">Critical</SelectItem>
+                        <SelectItem value="BLOCKER">Blocker</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 {showEpicField && (
-                  <div className="space-y-2">
-                    <Label>EPIC *</Label>
+                  <div className="space-y-1">
+                    <Label required className="mb-1">EPIC</Label>
                     <Select value={formEpicId} onValueChange={setFormEpicId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select EPIC" />
-                      </SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select EPIC" /></SelectTrigger>
                       <SelectContent>
                         {epics.map((epic) => (
-                          <SelectItem key={epic.id} value={epic.id}>
-                            {epic.ticketNo} - {epic.title}
-                          </SelectItem>
+                          <SelectItem key={epic.id} value={epic.id}>{epic.ticketNo} - {epic.title}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 )}
                 {showParentTaskField && (
-                  <div className="space-y-2">
-                    <Label>Parent Task *</Label>
+                  <div className="space-y-1">
+                    <Label required className="mb-1">Parent Task</Label>
                     <Select value={formParentTaskId} onValueChange={setFormParentTaskId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select parent task" />
-                      </SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select parent task" /></SelectTrigger>
                       <SelectContent>
-                        {tickets
-                          .filter((t) => t.type === "TASK" && (!formEpicId || t.epicId === formEpicId))
-                          .map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.ticketNo} - {t.title}
-                            </SelectItem>
-                          ))}
+                        {tickets.filter((t) => t.type === "TASK" && (!formEpicId || t.epicId === formEpicId)).map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.ticketNo} - {t.title}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label>Title *</Label>
-                  <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} required />
+                <div className="space-y-1">
+                  <Label className="mb-1">Project</Label>
+                  <Select value={formProjectId} onValueChange={setFormProjectId}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Select project" /></SelectTrigger>
+                    <SelectContent>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Description *</Label>
-                  <Textarea value={formDesc} onChange={(e) => setFormDesc(e.target.value)} required rows={4} />
+                <div className="space-y-1">
+                  <Label required className="mb-1">Title</Label>
+                  <Input placeholder="Enter ticket title" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} />
                 </div>
-                <Button type="submit" disabled={submitting} className="w-full">
-                  {submitting ? "Creating..." : "Create"}
+                <div className="space-y-1">
+                  <Label required className="mb-1">Description</Label>
+                  <div className="w-full min-w-0">
+                    <RichEditor value={formDesc} onChange={setFormDesc} placeholder="Describe the ticket in detail..." compact />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label className="mb-1">Attachment Links</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAttachments((current) => [...current, emptyAttachment()])}>
+                      <Plus className="h-4 w-4" /> Add
+                    </Button>
+                  </div>
+                  {attachments.map((attachment, index) => (
+                    <div key={index} className="grid gap-2 rounded-lg border bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto]">
+                      <Input placeholder="Paste Jam, Lightshot, Drive, or reference link" value={attachment.url} onChange={(e) => updateAttachment(index, "url", e.target.value)} />
+                      <Input placeholder="Attachment label" value={attachment.label} onChange={(e) => updateAttachment(index, "label", e.target.value)} />
+                      <Button type="button" variant="ghost" size="icon" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => removeAttachment(index)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Paste public or team-accessible links. They will open in a new tab.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleCreate} disabled={isSubmitting} className="bg-blue-500 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isSubmitting ? "Creating..." : "Create Ticket"}
                 </Button>
-              </form>
+              </div>
             </DialogContent>
           </Dialog>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Total" value={stats.total} />
+          <StatCard label="Open" value={stats.open} tone="text-blue-700" />
+          <StatCard label="Epics" value={stats.epic} tone="text-purple-700" />
+          <StatCard label="Dev" value={stats.dev} tone="text-violet-700" />
+          <StatCard label="QA" value={stats.qa} tone="text-amber-700" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card><CardContent className="flex items-center gap-3 p-4"><Layers className="h-5 w-5 text-purple-700" /><div><p className="text-sm text-muted-foreground">Epics</p><p className="text-lg font-semibold">{stats.epic}</p></div></CardContent></Card>
+          <Card><CardContent className="flex items-center gap-3 p-4"><Code2 className="h-5 w-5 text-violet-700" /><div><p className="text-sm text-muted-foreground">Development</p><p className="text-lg font-semibold">{stats.dev}</p></div></CardContent></Card>
+          <Card><CardContent className="flex items-center gap-3 p-4"><ShieldCheck className="h-5 w-5 text-amber-700" /><div><p className="text-sm text-muted-foreground">QA</p><p className="text-lg font-semibold">{stats.qa}</p></div></CardContent></Card>
+          <Card><CardContent className="flex items-center gap-3 p-4"><RotateCcw className="h-5 w-5 text-red-700" /><div><p className="text-sm text-muted-foreground">Ready</p><p className="text-lg font-semibold">{stats.ready}</p></div></CardContent></Card>
         </div>
 
         <div className="rounded-lg border bg-white shadow-sm">

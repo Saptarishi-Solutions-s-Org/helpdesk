@@ -130,6 +130,7 @@ export async function getActiveCoreUsers(roleNames = ["ADMIN", "DEVELOPER", "QUA
 }
 
 export const epicStatusTransitions: Record<string, string[]> = {
+  NEW: ["OPEN"],
   OPEN: ["IN_PROGRESS", "CANCELLED"],
   IN_PROGRESS: ["DONE", "CANCELLED"],
   DONE: ["CANCELLED"],
