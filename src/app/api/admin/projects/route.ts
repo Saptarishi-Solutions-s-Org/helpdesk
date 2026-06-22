@@ -16,7 +16,7 @@ async function nextProjectCode() {
     .where(ilike(projects.code, "SRSHD%"))
     .orderBy(desc(projects.code))
     .limit(1);
-  const lastNumber = Number(latest?.code?.replace(/D/g, "") || "0");
+  const lastNumber = Number(latest?.code?.replace(/\D/g, "") || "0");
   return `SRSHD${String(lastNumber + 1).padStart(3, "0")}`;
 }
 

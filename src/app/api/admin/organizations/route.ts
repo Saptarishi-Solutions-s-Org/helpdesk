@@ -17,7 +17,7 @@ async function nextOrganizationCode() {
     .where(ilike(organizations.code, "SHDORG%"))
     .orderBy(desc(organizations.code))
     .limit(1);
-  const lastNumber = Number(latest?.code?.replace(/D/g, "") || "0");
+  const lastNumber = Number(latest?.code?.replace(/\D/g, "") || "0");
   return `SHDORG${String(lastNumber + 1).padStart(3, "0")}`;
 }
 
