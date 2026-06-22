@@ -260,54 +260,6 @@ export function CoreTicketsPage() {
           </Dialog>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <StatCard label="Total" value={stats.total} />
-          <StatCard label="Open" value={stats.open} tone="text-blue-700" />
-          <StatCard label="Epics" value={stats.epic} tone="text-purple-700" />
-          <StatCard label="Dev" value={stats.dev} tone="text-violet-700" />
-          <StatCard label="QA" value={stats.qa} tone="text-amber-700" />
-          <StatCard label="Done" value={stats.done} tone="text-emerald-700" />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <Layers className="h-5 w-5 text-purple-700" />
-              <div>
-                <p className="text-sm text-muted-foreground">Epics</p>
-                <p className="text-lg font-semibold">{stats.epic}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <Code2 className="h-5 w-5 text-violet-700" />
-              <div>
-                <p className="text-sm text-muted-foreground">Development</p>
-                <p className="text-lg font-semibold">{stats.dev}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <ShieldCheck className="h-5 w-5 text-amber-700" />
-              <div>
-                <p className="text-sm text-muted-foreground">QA</p>
-                <p className="text-lg font-semibold">{stats.qa}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-3 p-4">
-              <RotateCcw className="h-5 w-5 text-red-700" />
-              <div>
-                <p className="text-sm text-muted-foreground">Ready for Production</p>
-                <p className="text-lg font-semibold">{stats.ready}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         <div className="rounded-lg border bg-white shadow-sm">
           <Table>
             <TableHeader className="bg-[#7677F41A]">
@@ -328,32 +280,13 @@ export function CoreTicketsPage() {
                 tickets.map((ticket, index) => (
                   <TableRow key={ticket.id}>
                     <TableCell className="text-sm text-muted-foreground">{index + 1}</TableCell>
-                    <TableCell className="text-sm font-semibold text-blue-700">
-                      <Link href={`/dashboard/core-tickets/${ticket.ticketNo}`}>{ticket.ticketNo}</Link>
-                    </TableCell>
+                    <TableCell className="text-sm font-semibold text-blue-700"><Link href={`/dashboard/core-tickets/${ticket.ticketNo}`}>{ticket.ticketNo}</Link></TableCell>
                     <TableCell>
                       <p className="max-w-[320px] truncate text-sm font-medium text-slate-800">{ticket.title}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>{ticket.projectName || "No project"} / {ticket.moduleName || "No module"}</span>
-                        {ticket.priority ? (
-                          <Badge variant="outline" className={priorityClassName[ticket.priority] ?? ""}>
-                            {formatStatus(ticket.priority)}
-                          </Badge>
-                        ) : null}
-                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{ticket.projectName || "No project"} / {ticket.moduleName || "No module"}</span>{ticket.priority ? <Badge variant="outline" className={priorityClassName[ticket.priority] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.priority)}</Badge> : null}</div>
                     </TableCell>
-                    <TableCell>
-                      {ticket.type ? (
-                        <Badge variant="outline" className={typeClassName[ticket.type] ?? ""}>
-                          {formatStatus(ticket.type)}
-                        </Badge>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={statusClassName[ticket.status] ?? ""}>
-                        {formatStatus(ticket.status)}
-                      </Badge>
-                    </TableCell>
+                    <TableCell>{ticket.type ? <Badge variant="outline" className={typeClassName[ticket.type] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.type)}</Badge> : null}</TableCell>
+                    <TableCell><Badge variant="outline" className={statusClassName[ticket.status] ?? "border-slate-200 bg-slate-50"}>{formatStatus(ticket.status)}</Badge></TableCell>
                     <TableCell className="text-sm text-slate-700">
                       <p>Dev: {ticket.developerName || "Not assigned"}</p>
                       <p>QA: {ticket.qaName || "Not assigned"}</p>

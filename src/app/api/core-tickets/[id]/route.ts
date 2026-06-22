@@ -2,6 +2,7 @@ import { desc, eq, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   coreTicketActivity,
+  coreTicketAttachments,
   coreTicketComments,
   coreTicketLinks,
   coreTicketStatusHistory,
@@ -94,7 +95,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     const ticket = ticketRows[0];
     if (!ticket) return ok({ ticket: null }, 404);
 
-    const [comments, history, activity, worklogs, internalUsers, childTickets, links] = await Promise.all([
+    const [comments, history, activity, worklogs, internalUsers, childTickets, links, attachments] = await Promise.all([
       db
         .select({
           id: coreTicketComments.id,
@@ -178,6 +179,11 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
         .leftJoin(linkTarget, eq(coreTicketLinks.targetTicketId, linkTarget.id))
         .where(or(eq(coreTicketLinks.sourceTicketId, ticket.id), eq(coreTicketLinks.targetTicketId, ticket.id)))
         .orderBy(desc(coreTicketLinks.createdAt)),
+      db
+        .select()
+        .from(coreTicketAttachments)
+        .where(eq(coreTicketAttachments.coreTicketId, ticket.id))
+        .orderBy(desc(coreTicketAttachments.createdAt)),
     ]);
 
     return ok({
@@ -189,6 +195,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       internalUsers,
       childTickets,
       links,
+      attachments,
       viewer: { id: session.id, role: session.role },
     });
   } catch (error) {

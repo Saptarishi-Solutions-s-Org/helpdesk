@@ -18,7 +18,13 @@ declare
     'internal_ticket_comments',
     'internal_ticket_status_history',
     'internal_ticket_activity',
-    'internal_ticket_worklogs'
+    'internal_ticket_worklogs',
+    'core_tickets',
+    'core_ticket_comments',
+    'core_ticket_status_history',
+    'core_ticket_activity',
+    'core_ticket_worklogs',
+    'core_ticket_links'
   ];
 begin
   foreach realtime_table in array realtime_tables loop

@@ -57,3 +57,23 @@ drop trigger if exists set_internal_ticket_worklogs_updated_at on public.interna
 create trigger set_internal_ticket_worklogs_updated_at
 before update on public.internal_ticket_worklogs
 for each row execute function public.set_updated_at();
+
+drop trigger if exists set_core_tickets_updated_at on public.core_tickets;
+create trigger set_core_tickets_updated_at
+before update on public.core_tickets
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_core_ticket_comments_updated_at on public.core_ticket_comments;
+create trigger set_core_ticket_comments_updated_at
+before update on public.core_ticket_comments
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_core_ticket_worklogs_updated_at on public.core_ticket_worklogs;
+create trigger set_core_ticket_worklogs_updated_at
+before update on public.core_ticket_worklogs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_core_ticket_attachments_updated_at on public.core_ticket_attachments;
+create trigger set_core_ticket_attachments_updated_at
+before update on public.core_ticket_attachments
+for each row execute function public.set_updated_at();

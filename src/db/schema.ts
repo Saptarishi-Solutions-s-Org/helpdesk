@@ -492,6 +492,18 @@ export const coreTicketLinks = pgTable("core_ticket_links", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const coreTicketAttachments = pgTable("core_ticket_attachments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  coreTicketId: uuid("core_ticket_id").notNull().references(() => coreTickets.id),
+  uploadedById: uuid("uploaded_by_id").notNull().references(() => users.id),
+  url: text("url").notNull(),
+  publicId: text("public_id").notNull(),
+  fileName: varchar("file_name", { length: 260 }).notNull(),
+  resourceType: attachmentResourceEnum("resource_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   recipientId: uuid("recipient_id").notNull().references(() => users.id),
