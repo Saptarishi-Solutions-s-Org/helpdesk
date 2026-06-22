@@ -16,6 +16,7 @@ import {
   ExternalLink,
   FolderKanban,
   Home,
+  Layers,
   LogOut,
   Ticket,
   UsersRound,
@@ -92,11 +93,13 @@ const userLinks = [
 const internalLinks = [
   { href: "/dashboard", label: "Overview", icon: Home },
   { href: "/dashboard/internal-tickets", label: "Internal Tickets", icon: Code2 },
+  { href: "/dashboard/core-tickets", label: "Core Tickets", icon: Layers },
 ];
 
 const adminLinks = [
   ...userLinks,
   { href: "/dashboard/internal-tickets", label: "Internal Tickets", icon: Code2 },
+  { href: "/dashboard/core-tickets", label: "Core Tickets", icon: Layers },
   { href: "/dashboard/admin/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/admin/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard/admin/modules", label: "Modules", icon: Boxes },

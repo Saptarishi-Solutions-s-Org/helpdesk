@@ -17,7 +17,18 @@ export const organizationStatusEnum = pgEnum("organization_status", [
   "INACTIVE",
 ]);
 export const userStatusEnum = pgEnum("user_status", ["ACTIVE", "INACTIVE"]);
-export const issueTypeEnum = pgEnum("issue_type", ["BUG", "CR", "ISSUE", "SERVICE_REQUEST"]);
+export const issueTypeEnum = pgEnum("issue_type", [
+  "BUG",
+  "CR",
+  "ISSUE",
+  "SERVICE_REQUEST",
+  "EPIC",
+  "TASK",
+  "SUBTASK",
+  "IMPROVEMENT",
+  "FEATURE",
+  "DOCUMENTATION",
+]);
 export const issuePriorityEnum = pgEnum("issue_priority", [
   "LOW",
   "MEDIUM",
@@ -61,6 +72,29 @@ export const internalTicketStatusEnum = pgEnum("internal_ticket_status", [
   "QA_IN_PROGRESS",
   "READY_FOR_PRODUCTION",
   "REOPENED",
+]);
+
+export const coreTicketStatusEnum = pgEnum("core_ticket_status", [
+  "OPEN",
+  "IN_PROGRESS",
+  "DONE",
+  "CANCELLED",
+  "NEW",
+  "ACCEPTED",
+  "DEV_IN_PROGRESS",
+  "DEV_REVIEW",
+  "READY_FOR_QA",
+  "QA_IN_PROGRESS",
+  "READY_FOR_PRODUCTION",
+  "REOPENED",
+]);
+
+export const coreTicketLinkTypeEnum = pgEnum("core_ticket_link_type", [
+  "RELATES_TO",
+  "BLOCKS",
+  "IS_BLOCKED_BY",
+  "DUPLICATES",
+  "IS_DUPLICATED_BY",
 ]);
 
 export const organizations = pgTable(
@@ -365,6 +399,97 @@ export const internalTicketWorklogs = pgTable("internal_ticket_worklogs", {
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const coreTickets = pgTable(
+  "core_tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ticketNo: varchar("ticket_no", { length: 64 }).notNull(),
+    type: issueTypeEnum("type"),
+    priority: issuePriorityEnum("priority"),
+    status: coreTicketStatusEnum("status").notNull().default("NEW"),
+    title: varchar("title", { length: 220 }).notNull(),
+    description: text("description").notNull(),
+    descriptionJson: jsonb("description_json"),
+    epicId: uuid("epic_id"),
+    parentTaskId: uuid("parent_task_id"),
+    projectId: uuid("project_id").references(() => projects.id),
+    moduleId: uuid("module_id").references(() => modules.id),
+    assignedDeveloperId: uuid("assigned_developer_id").references(() => users.id),
+    assignedQaId: uuid("assigned_qa_id").references(() => users.id),
+    assignedAdminId: uuid("assigned_admin_id").references(() => users.id),
+    createdById: uuid("created_by_id").notNull().references(() => users.id),
+    acceptedAt: timestamp("accepted_at"),
+    devStartedAt: timestamp("dev_started_at"),
+    readyForQaAt: timestamp("ready_for_qa_at"),
+    qaStartedAt: timestamp("qa_started_at"),
+    readyForProductionAt: timestamp("ready_for_production_at"),
+    reopenedAt: timestamp("reopened_at"),
+    closedAt: timestamp("closed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    ticketUnique: uniqueIndex("core_tickets_ticket_no_unique").on(table.ticketNo),
+    statusIdx: index("core_tickets_status_idx").on(table.status),
+    epicIdx: index("core_tickets_epic_idx").on(table.epicId),
+    parentTaskIdx: index("core_tickets_parent_task_idx").on(table.parentTaskId),
+    developerIdx: index("core_tickets_developer_idx").on(table.assignedDeveloperId),
+    qaIdx: index("core_tickets_qa_idx").on(table.assignedQaId),
+    adminIdx: index("core_tickets_admin_idx").on(table.assignedAdminId),
+  }),
+);
+
+export const coreTicketComments = pgTable("core_ticket_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  coreTicketId: uuid("core_ticket_id").notNull().references(() => coreTickets.id),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  bodyJson: jsonb("body_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const coreTicketStatusHistory = pgTable("core_ticket_status_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  coreTicketId: uuid("core_ticket_id").notNull().references(() => coreTickets.id),
+  actorId: uuid("actor_id").notNull().references(() => users.id),
+  fromStatus: coreTicketStatusEnum("from_status"),
+  toStatus: coreTicketStatusEnum("to_status").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const coreTicketActivity = pgTable("core_ticket_activity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  coreTicketId: uuid("core_ticket_id").notNull().references(() => coreTickets.id),
+  actorId: uuid("actor_id").references(() => users.id),
+  type: varchar("type", { length: 60 }).notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const coreTicketWorklogs = pgTable("core_ticket_worklogs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  coreTicketId: uuid("core_ticket_id").notNull().references(() => coreTickets.id),
+  workerId: uuid("worker_id").references(() => users.id),
+  workerRole: varchar("worker_role", { length: 30 }).notNull().default("DEVELOPER"),
+  startedAt: timestamp("started_at").notNull(),
+  stoppedAt: timestamp("stopped_at"),
+  durationMinutes: integer("duration_minutes"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const coreTicketLinks = pgTable("core_ticket_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sourceTicketId: uuid("source_ticket_id").notNull().references(() => coreTickets.id),
+  targetTicketId: uuid("target_ticket_id").notNull().references(() => coreTickets.id),
+  linkType: coreTicketLinkTypeEnum("link_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const notifications = pgTable("notifications", {

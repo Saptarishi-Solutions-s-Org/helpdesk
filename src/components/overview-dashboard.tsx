@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { Activity, AlertCircle, CheckCircle2, Clock3, Code2, RotateCcw, Ticket } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle2, Clock3, Code2, Layers, RotateCcw, Ticket } from "lucide-react";
 import GlobalLoader from "@/components/commoncomponents/globalloader";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,21 @@ const shdStatusClassName: Record<string, string> = {
 };
 
 const sitStatusClassName: Record<string, string> = {
+  NEW: "border-sky-100 bg-sky-50 text-sky-700",
+  ACCEPTED: "border-blue-100 bg-blue-50 text-blue-700",
+  DEV_IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
+  DEV_REVIEW: "border-purple-100 bg-purple-50 text-purple-700",
+  READY_FOR_QA: "border-cyan-100 bg-cyan-50 text-cyan-700",
+  QA_IN_PROGRESS: "border-amber-100 bg-amber-50 text-amber-700",
+  READY_FOR_PRODUCTION: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  REOPENED: "border-red-100 bg-red-50 text-red-700",
+};
+
+const coreStatusClassName: Record<string, string> = {
+  OPEN: "border-sky-100 bg-sky-50 text-sky-700",
+  IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
+  DONE: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  CANCELLED: "border-slate-200 bg-slate-50 text-slate-500",
   NEW: "border-sky-100 bg-sky-50 text-sky-700",
   ACCEPTED: "border-blue-100 bg-blue-50 text-blue-700",
   DEV_IN_PROGRESS: "border-violet-100 bg-violet-50 text-violet-700",
@@ -140,16 +155,30 @@ function SitSection({ rows, stats }: { rows: TicketRow[]; stats: Stats }) {
   );
 }
 
+function CoreSection({ rows, stats }: { rows: TicketRow[]; stats: Stats }) {
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="text-xl font-semibold text-slate-900">Core Tickets</h2><p className="text-sm text-muted-foreground">Dev/QA workflow tickets for the core team.</p></div><Link href="/dashboard/core-tickets" className="inline-flex h-9 items-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700"><Layers className="h-4 w-4" />Open Core</Link></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><StatCard label="Total Core" value={stats.total || 0} /><StatCard label="Open" value={stats.open || 0} tone="text-blue-700" /><StatCard label="Epics" value={stats.epic || 0} tone="text-purple-700" /><StatCard label="Dev" value={stats.dev || 0} tone="text-violet-700" /><StatCard label="Done" value={stats.done || 0} tone="text-emerald-700" /></div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]"><Card><CardContent className="p-5"><div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-slate-900">Core Flow</h2><p className="text-sm text-muted-foreground">Development and QA movement.</p></div><Layers className="h-5 w-5 text-blue-600" /></div><div className="grid gap-3 sm:grid-cols-2"><SummaryItem icon={Layers} label="Epics" value={stats.epic || 0} tone="bg-purple-50 text-purple-700" /><SummaryItem icon={Code2} label="Development" value={stats.dev || 0} tone="bg-violet-50 text-violet-700" /><SummaryItem icon={CheckCircle2} label="QA" value={stats.qa || 0} tone="bg-amber-50 text-amber-700" /><SummaryItem icon={RotateCcw} label="Ready" value={stats.ready || 0} tone="bg-emerald-50 text-emerald-700" /></div></CardContent></Card><StatusSplit rows={rows} classNameMap={coreStatusClassName} /></div>
+      <LatestMovement title="Latest Core Movement" href="/dashboard/core-tickets" rows={rows} classNameMap={coreStatusClassName} />
+    </section>
+  );
+}
+
 export function OverviewDashboard({ role }: { role: Role }) {
   const loadShd = role === "ADMIN" || role === "CLIENT";
   const loadSit = role === "ADMIN" || role === "DEVELOPER" || role === "QUALITY ANALYST";
+  const loadCore = role === "ADMIN" || role === "DEVELOPER" || role === "QUALITY ANALYST";
   const shd = useSWR(loadShd ? "/api/issues?scope=organization" : null, fetcher, { refreshInterval: 15000 });
   const sit = useSWR(loadSit ? "/api/internal-tickets" : null, fetcher, { refreshInterval: 15000 });
+  const core = useSWR(loadCore ? "/api/core-tickets" : null, fetcher, { refreshInterval: 15000 });
 
   useRealtime(["issues", "issue_comments", "issue_status_history", "issue_activity"], () => { if (loadShd) void shd.mutate(); });
   useRealtime(["internal_tickets", "internal_ticket_comments", "internal_ticket_status_history", "internal_ticket_worklogs"], () => { if (loadSit) void sit.mutate(); });
+  useRealtime(["core_tickets", "core_ticket_comments", "core_ticket_status_history", "core_ticket_activity", "core_ticket_worklogs"], () => { if (loadCore) void core.mutate(); });
 
-  if ((loadShd && shd.isLoading) || (loadSit && sit.isLoading)) return <GlobalLoader />;
+  if ((loadShd && shd.isLoading) || (loadSit && sit.isLoading) || (loadCore && core.isLoading)) return <GlobalLoader />;
 
   return (
     <main className="min-h-full bg-white p-6">
@@ -157,6 +186,7 @@ export function OverviewDashboard({ role }: { role: Role }) {
         <div><h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1><p className="text-sm text-muted-foreground">Track support activity, workflow progress, and resolution trends in one place.</p></div>
         {loadShd ? <ShdSection rows={shd.data?.issues ?? []} stats={shd.data?.stats ?? { total: 0 }} /> : null}
         {loadSit ? <SitSection rows={sit.data?.tickets ?? []} stats={sit.data?.stats ?? { total: 0 }} /> : null}
+        {loadCore ? <CoreSection rows={core.data?.tickets ?? []} stats={core.data?.stats ?? { total: 0 }} /> : null}
       </div>
     </main>
   );

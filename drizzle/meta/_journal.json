@@ -50,6 +50,13 @@
       "when": 1781167724158,
       "tag": "0006_fancy_lockheed",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782125860692,
+      "tag": "0007_green_tattoo",
+      "breakpoints": true
     }
   ]
 }
