@@ -160,7 +160,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
           status: coreTickets.status,
         })
         .from(coreTickets)
-        .where(eq(coreTickets.epicId, ticket.id))
+        .where(or(eq(coreTickets.epicId, ticket.id), eq(coreTickets.parentTaskId, ticket.id)))
         .orderBy(desc(coreTickets.createdAt)),
       db
         .select({

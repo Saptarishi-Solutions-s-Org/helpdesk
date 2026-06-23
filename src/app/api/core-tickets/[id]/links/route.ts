@@ -47,11 +47,23 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const { id } = await context.params;
 
     const body = await req.json();
-    const { targetTicketId, linkType } = body;
+    const { targetTicketNo, linkType } = body;
 
-    if (!targetTicketId || !linkType) {
-      return NextResponse.json({ message: "targetTicketId and linkType are required" }, { status: 400 });
+    if (!targetTicketNo || !linkType) {
+      return NextResponse.json({ message: "targetTicketNo and linkType are required" }, { status: 400 });
     }
+
+    const [targetTicket] = await db
+      .select({ id: coreTickets.id })
+      .from(coreTickets)
+      .where(eq(coreTickets.ticketNo, targetTicketNo))
+      .limit(1);
+
+    if (!targetTicket) {
+      return NextResponse.json({ message: `Ticket ${targetTicketNo} not found` }, { status: 404 });
+    }
+
+    const targetTicketId = targetTicket.id;
 
     const [existing] = await db
       .select({ id: coreTicketLinks.id })

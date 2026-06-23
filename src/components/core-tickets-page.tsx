@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableStateRow } from "@/components/commoncomponents/table-state-row";
 import { useRealtime } from "@/hooks/useRealtime";
@@ -91,6 +92,7 @@ type EpicRow = {
   id: string;
   ticketNo: string;
   title: string;
+  projectId?: string | null;
 };
 
 type AttachmentDraft = { url: string; label: string };
@@ -98,9 +100,9 @@ const emptyAttachment = (): AttachmentDraft => ({ url: "", label: "" });
 
 export function CoreTicketsPage() {
   const router = useRouter();
-  const { data, isLoading, mutate } = useSWR("/api/core-tickets", fetcher, { refreshInterval: 15000 });
   const { data: epicsData } = useSWR("/api/core-tickets?type=epic", fetcher);
   const { data: projectsData } = useSWR("/api/admin/projects", fetcher);
+  const [view, setView] = useState<"assigned" | "all">("assigned");
   const [createOpen, setCreateOpen] = useState(false);
   const [formType, setFormType] = useState("TASK");
   const [formTitle, setFormTitle] = useState("");
@@ -111,6 +113,9 @@ export function CoreTicketsPage() {
   const [formProjectId, setFormProjectId] = useState("");
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([emptyAttachment()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const viewParam = view === "all" ? "" : "?view=assigned";
+  const { data, isLoading, mutate } = useSWR(`/api/core-tickets${viewParam}`, fetcher, { refreshInterval: 15000 });
 
   useRealtime(["core_tickets", "core_ticket_comments", "core_ticket_status_history", "core_ticket_worklogs"], () => {
     void mutate();
@@ -124,7 +129,24 @@ export function CoreTicketsPage() {
   const projects: Array<{ id: string; name: string; code: string }> = projectsData?.projects ?? [];
 
   const showEpicField = formType !== "EPIC" && formType !== "SUBTASK";
-  const showParentTaskField = formType === "SUBTASK";
+  const showParentTaskField = false;
+
+  const handleEpicChange = (value: string) => {
+    setFormEpicId(value);
+    const epic = epics.find((e) => e.id === value);
+    if (epic) {
+      const projectId = (epic as unknown as { projectId?: string }).projectId;
+      if (projectId) setFormProjectId(projectId);
+    }
+  };
+
+  const handleTypeChange = (value: string) => {
+    setFormType(value);
+    if (value === "SUBTASK") {
+      setFormEpicId("");
+      setFormParentTaskId("");
+    }
+  };
 
   const reset = () => {
     setFormType("TASK");
@@ -204,14 +226,15 @@ export function CoreTicketsPage() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <Label required className="mb-1">Type</Label>
-                    <Select value={formType} onValueChange={setFormType}>
+                    <Select value={formType} onValueChange={handleTypeChange}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="TASK">Task</SelectItem>
-                        <SelectItem value="SUBTASK">Sub Task</SelectItem>
                         <SelectItem value="IMPROVEMENT">Improvement</SelectItem>
                         <SelectItem value="FEATURE">Feature</SelectItem>
                         <SelectItem value="DOCUMENTATION">Documentation</SelectItem>
+                        <SelectItem value="BUG">Bug</SelectItem>
+                        <SelectItem value="CR">Change Request</SelectItem>
                         <SelectItem value="EPIC">Epic</SelectItem>
                       </SelectContent>
                     </Select>
@@ -233,7 +256,7 @@ export function CoreTicketsPage() {
                 {showEpicField && (
                   <div className="space-y-1">
                     <Label required className="mb-1">EPIC</Label>
-                    <Select value={formEpicId} onValueChange={setFormEpicId} required>
+                    <Select value={formEpicId} onValueChange={handleEpicChange} required>
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select EPIC" /></SelectTrigger>
                       <SelectContent>
                         {epics.map((epic) => (
@@ -258,8 +281,8 @@ export function CoreTicketsPage() {
                 )}
                 <div className="space-y-1">
                   <Label className="mb-1">Project</Label>
-                  <Select value={formProjectId} onValueChange={setFormProjectId}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select project" /></SelectTrigger>
+                  <Select value={formProjectId} onValueChange={setFormProjectId} disabled>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Auto from EPIC" /></SelectTrigger>
                     <SelectContent>
                       {projects.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.code} - {p.name}</SelectItem>
@@ -323,44 +346,92 @@ export function CoreTicketsPage() {
           <Card><CardContent className="flex items-center gap-3 p-4"><RotateCcw className="h-5 w-5 text-red-700" /><div><p className="text-sm text-muted-foreground">Ready</p><p className="text-lg font-semibold">{stats.ready}</p></div></CardContent></Card>
         </div>
 
-        <div className="rounded-lg border bg-white shadow-sm">
-          <Table>
-            <TableHeader className="bg-[#7677F41A]">
-              <TableRow>
-                <TableHead>S.No</TableHead>
-                <TableHead>Ticket</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignees</TableHead>
-                <TableHead>Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tickets.length === 0 ? (
-                <TableStateRow colSpan={7} type="empty" emptyMessage="No core tickets found." />
-              ) : (
-                tickets.map((ticket, index) => (
-                  <TableRow key={ticket.id}>
-                    <TableCell className="text-sm text-muted-foreground">{index + 1}</TableCell>
-                    <TableCell className="text-sm font-semibold text-blue-700"><Link href={`/dashboard/core-tickets/${ticket.ticketNo}`}>{ticket.ticketNo}</Link></TableCell>
-                    <TableCell>
-                      <p className="max-w-[320px] truncate text-sm font-medium text-slate-800">{ticket.title}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{ticket.projectName || "No project"} / {ticket.moduleName || "No module"}</span>{ticket.priority ? <Badge variant="outline" className={priorityClassName[ticket.priority] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.priority)}</Badge> : null}</div>
-                    </TableCell>
-                    <TableCell>{ticket.type ? <Badge variant="outline" className={typeClassName[ticket.type] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.type)}</Badge> : null}</TableCell>
-                    <TableCell><Badge variant="outline" className={statusClassName[ticket.status] ?? "border-slate-200 bg-slate-50"}>{formatStatus(ticket.status)}</Badge></TableCell>
-                    <TableCell className="text-sm text-slate-700">
-                      <p>Dev: {ticket.developerName || "Not assigned"}</p>
-                      <p>QA: {ticket.qaName || "Not assigned"}</p>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{toIST(ticket.updatedAt)}</TableCell>
+        <Tabs value={view} onValueChange={(v) => setView(v as "assigned" | "all")}>
+          <TabsList className="grid h-10 w-full grid-cols-2">
+            <TabsTrigger value="assigned">Assigned</TabsTrigger>
+            <TabsTrigger value="all">All</TabsTrigger>
+          </TabsList>
+          <TabsContent value="assigned">
+            <div className="rounded-lg border bg-white shadow-sm">
+              <Table>
+                <TableHeader className="bg-[#7677F41A]">
+                  <TableRow>
+                    <TableHead>S.No</TableHead>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assignees</TableHead>
+                    <TableHead>Updated</TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {tickets.length === 0 ? (
+                    <TableStateRow colSpan={7} type="empty" emptyMessage="No core tickets found." />
+                  ) : (
+                    tickets.map((ticket, index) => (
+                      <TableRow key={ticket.id}>
+                        <TableCell className="text-sm text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="text-sm font-semibold text-blue-700"><Link href={`/dashboard/core-tickets/${ticket.ticketNo}`}>{ticket.ticketNo}</Link></TableCell>
+                        <TableCell>
+                          <p className="max-w-[320px] truncate text-sm font-medium text-slate-800">{ticket.title}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{ticket.projectName || "No project"} / {ticket.moduleName || "No module"}</span>{ticket.priority ? <Badge variant="outline" className={priorityClassName[ticket.priority] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.priority)}</Badge> : null}</div>
+                        </TableCell>
+                        <TableCell>{ticket.type ? <Badge variant="outline" className={typeClassName[ticket.type] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.type)}</Badge> : null}</TableCell>
+                        <TableCell><Badge variant="outline" className={statusClassName[ticket.status] ?? "border-slate-200 bg-slate-50"}>{formatStatus(ticket.status)}</Badge></TableCell>
+                        <TableCell className="text-sm text-slate-700">
+                          <p>Dev: {ticket.developerName || "Not assigned"}</p>
+                          <p>QA: {ticket.qaName || "Not assigned"}</p>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{toIST(ticket.updatedAt)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+          <TabsContent value="all">
+            <div className="rounded-lg border bg-white shadow-sm">
+              <Table>
+                <TableHeader className="bg-[#7677F41A]">
+                  <TableRow>
+                    <TableHead>S.No</TableHead>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assignees</TableHead>
+                    <TableHead>Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tickets.length === 0 ? (
+                    <TableStateRow colSpan={7} type="empty" emptyMessage="No core tickets found." />
+                  ) : (
+                    tickets.map((ticket, index) => (
+                      <TableRow key={ticket.id}>
+                        <TableCell className="text-sm text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="text-sm font-semibold text-blue-700"><Link href={`/dashboard/core-tickets/${ticket.ticketNo}`}>{ticket.ticketNo}</Link></TableCell>
+                        <TableCell>
+                          <p className="max-w-[320px] truncate text-sm font-medium text-slate-800">{ticket.title}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{ticket.projectName || "No project"} / {ticket.moduleName || "No module"}</span>{ticket.priority ? <Badge variant="outline" className={priorityClassName[ticket.priority] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.priority)}</Badge> : null}</div>
+                        </TableCell>
+                        <TableCell>{ticket.type ? <Badge variant="outline" className={typeClassName[ticket.type] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(ticket.type)}</Badge> : null}</TableCell>
+                        <TableCell><Badge variant="outline" className={statusClassName[ticket.status] ?? "border-slate-200 bg-slate-50"}>{formatStatus(ticket.status)}</Badge></TableCell>
+                        <TableCell className="text-sm text-slate-700">
+                          <p>Dev: {ticket.developerName || "Not assigned"}</p>
+                          <p>QA: {ticket.qaName || "Not assigned"}</p>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{toIST(ticket.updatedAt)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </main>
   );

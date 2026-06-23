@@ -107,7 +107,9 @@ type Ticket = {
   epicTicketNo: string | null;
   parentTaskId: string | null;
   parentTaskTicketNo: string | null;
+  projectId: string | null;
   projectName: string | null;
+  moduleId: string | null;
   moduleName: string | null;
   assignedDeveloperId: string | null;
   developerName: string | null;
@@ -161,15 +163,20 @@ function canDeleteComment(role: Role, viewerId: string, authorId?: string) {
 }
 
 function statusOptionsFor(role: Role, ticket: Ticket, viewerId: string) {
+  let options: string[];
   if (ticket.type === "EPIC") {
-    const options = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
-    if (!options.includes(ticket.status)) options.unshift(ticket.status);
-    return options;
+    options = ["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"];
+  } else if (role === "ADMIN") {
+    options = ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];
+  } else if (role === "DEVELOPER" && ticket.assignedDeveloperId === viewerId) {
+    options = ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "REOPENED"];
+  } else if (role === "QUALITY ANALYST" && ticket.assignedQaId === viewerId) {
+    options = ["READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];
+  } else {
+    return [ticket.status];
   }
-  if (role === "ADMIN") return ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];
-  if (role === "DEVELOPER" && ticket.assignedDeveloperId === viewerId) return ["NEW", "ACCEPTED", "DEV_IN_PROGRESS", "DEV_REVIEW", "READY_FOR_QA", "REOPENED"];
-  if (role === "QUALITY ANALYST" && ticket.assignedQaId === viewerId) return ["READY_FOR_QA", "QA_IN_PROGRESS", "READY_FOR_PRODUCTION", "REOPENED"];
-  return [ticket.status];
+  if (!options.includes(ticket.status)) options.unshift(ticket.status);
+  return options;
 }
 
 export function CoreTicketDetailClient() {
@@ -191,18 +198,31 @@ export function CoreTicketDetailClient() {
   const [worklogNote, setWorklogNote] = useState("");
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedModule, setSelectedModule] = useState("");
   const [busyStatus, setBusyStatus] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
   const [savingWorklog, setSavingWorklog] = useState(false);
   const [linkTargetId, setLinkTargetId] = useState("");
   const [linkType, setLinkType] = useState("RELATES_TO");
   const [savingLink, setSavingLink] = useState(false);
+  const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editAttachments, setEditAttachments] = useState<Array<{ url: string; label: string }>>([]);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [subTaskOpen, setSubTaskOpen] = useState(false);
+  const [subTaskTitle, setSubTaskTitle] = useState("");
+  const [subTaskDesc, setSubTaskDesc] = useState("");
+  const [subTaskPriority, setSubTaskPriority] = useState("");
+  const [subTaskAttachments, setSubTaskAttachments] = useState<Array<{ url: string; label: string }>>([]);
+  const [subTaskSubmitting, setSubTaskSubmitting] = useState(false);
+  const { data: headerModulesData } = useSWR(
+    data?.ticket?.projectId ? `/api/admin/modules?projectId=${data.ticket.projectId}` : null,
+    fetcher,
+  );
+  const headerModules: Array<{ id: string; name: string; code: string }> = headerModulesData?.modules ?? [];
 
   useRealtime(["core_tickets", "core_ticket_comments", "core_ticket_status_history", "core_ticket_activity", "core_ticket_worklogs"], () => { void mutate(); });
 
@@ -230,8 +250,10 @@ export function CoreTicketDetailClient() {
   const mentionSuggestions = mentionQuery === null || mentionQuery === closedMentionQuery ? [] : mentionCandidates.filter((c: InternalUser) => `${c.name} ${c.email}`.toLowerCase().includes(mentionQuery)).slice(0, 6);
 
   const isEpic = ticket.type === "EPIC";
-  const epicChildDone = childTickets.filter((c) => c.status === "DONE" || c.status === "READY_FOR_PRODUCTION").length;
-  const epicProgress = childTickets.length > 0 ? Math.round((epicChildDone / childTickets.length) * 100) : 0;
+  const epicChildren = childTickets.filter((c) => c.type !== "SUBTASK");
+  const subTaskChildren = childTickets.filter((c) => c.type === "SUBTASK");
+  const epicChildDone = epicChildren.filter((c) => c.status === "DONE" || c.status === "READY_FOR_PRODUCTION").length;
+  const epicProgress = epicChildren.length > 0 ? Math.round((epicChildDone / epicChildren.length) * 100) : 0;
 
   function updateTab(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -260,17 +282,32 @@ export function CoreTicketDetailClient() {
 
   async function moveStatus() {
     const status = selectedStatus || ticket.status;
+    const moduleId = selectedModule || ticket.moduleId || null;
     setBusyStatus(true);
     try {
-      const res = await fetch(`/api/core-tickets/${ticket.id}/status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) return toast.error(result.message || "Unable to move status");
-      toast.success("Status updated");
+      const hasStatusChange = selectedStatus && selectedStatus !== ticket.status;
+      const hasModuleChange = selectedModule && selectedModule !== (ticket.moduleId ?? "");
+      if (hasStatusChange) {
+        const res = await fetch(`/api/core-tickets/${ticket.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) return toast.error(result.message || "Unable to move status");
+      }
+      if (hasModuleChange) {
+        const res = await fetch(`/api/core-tickets/${ticket.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ moduleId }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) return toast.error(result.message || "Unable to update module");
+      }
+      toast.success("Updated");
       setSelectedStatus("");
+      setSelectedModule("");
       mutate();
     } finally {
       setBusyStatus(false);
@@ -338,7 +375,7 @@ export function CoreTicketDetailClient() {
       const res = await fetch(`/api/core-tickets/${ticket.id}/links`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetTicketId: linkTargetId, linkType }),
+        body: JSON.stringify({ targetTicketNo: linkTargetId, linkType }),
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) return toast.error(result.message || "Unable to add link");
@@ -347,6 +384,18 @@ export function CoreTicketDetailClient() {
       mutate();
     } finally {
       setSavingLink(false);
+    }
+  }
+
+  async function removeLink(linkId: string) {
+    setDeletingLinkId(linkId);
+    try {
+      const res = await fetch(`/api/core-tickets/${ticket.id}/links/${linkId}`, { method: "DELETE" });
+      if (!res.ok) return toast.error("Unable to remove link");
+      toast.success("Link removed");
+      mutate();
+    } finally {
+      setDeletingLinkId(null);
     }
   }
 
@@ -418,6 +467,11 @@ export function CoreTicketDetailClient() {
           <Button variant="outline" size="sm" onClick={() => { setEditTitle(ticket.title); setEditDescription(ticket.description); setEditAttachments([]); setEditOpen(true); }}>
             <Pencil className="h-4 w-4" /> Edit
           </Button>
+          {ticket.type === "TASK" ? (
+            <Button variant="outline" size="sm" onClick={() => { setSubTaskOpen(true); }}>
+              <Plus className="h-4 w-4" /> Sub Task
+            </Button>
+          ) : null}
         </div>
 
         <section className="rounded-lg border bg-white p-4 shadow-sm">
@@ -437,12 +491,22 @@ export function CoreTicketDetailClient() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <div className="flex min-w-[180px]">
+                <Select value={selectedModule} onValueChange={setSelectedModule}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={ticket.moduleName || "Module"} /></SelectTrigger>
+                  <SelectContent>
+                    {headerModules.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex min-w-[260px] gap-2">
                 <Select value={effectiveStatus} onValueChange={setSelectedStatus}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>{statusOptions.map((item) => <SelectItem key={item} value={item}>{formatStatus(item)}</SelectItem>)}</SelectContent>
                 </Select>
-                <Button onClick={moveStatus} disabled={busyStatus || effectiveStatus === ticket.status} className="bg-blue-600 text-white hover:bg-blue-700">
+                <Button onClick={moveStatus} disabled={busyStatus || (!selectedStatus && !selectedModule)} className="bg-blue-600 text-white hover:bg-blue-700">
                   {busyStatus ? "Saving..." : "Update"}
                 </Button>
               </div>
@@ -466,6 +530,28 @@ export function CoreTicketDetailClient() {
                   <Link key={child.id} href={`/dashboard/core-tickets/${child.ticketNo}`} className="flex items-center justify-between gap-3 rounded-lg border bg-slate-50 px-3 py-2 text-sm transition hover:border-purple-200 hover:bg-purple-50/40">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className={typeClassName[child.type ?? ""] ?? "border-slate-200 bg-slate-50 text-slate-600"}>{formatStatus(child.type ?? "")}</Badge>
+                      <span className="font-medium text-blue-700">{child.ticketNo}</span>
+                      <span className="text-slate-700">{child.title}</span>
+                    </div>
+                    <Badge variant="outline" className={statusClassName[child.status] ?? "border-slate-200 bg-slate-50"}>{formatStatus(child.status)}</Badge>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {ticket.type === "TASK" && childTickets.filter((c) => c.type === "SUBTASK").length > 0 ? (
+          <Card>
+            <CardContent className="space-y-3 p-5">
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4 text-blue-700" />
+                <h2 className="text-base font-semibold">Sub Tasks</h2>
+              </div>
+              <div className="space-y-2">
+                {childTickets.filter((c) => c.type === "SUBTASK").map((child) => (
+                  <Link key={child.id} href={`/dashboard/core-tickets/${child.ticketNo}`} className="flex items-center justify-between gap-3 rounded-lg border bg-slate-50 px-3 py-2 text-sm transition hover:border-blue-200 hover:bg-blue-50/40">
+                    <div className="flex items-center gap-2">
                       <span className="font-medium text-blue-700">{child.ticketNo}</span>
                       <span className="text-slate-700">{child.title}</span>
                     </div>
@@ -561,20 +647,22 @@ export function CoreTicketDetailClient() {
                     const isSource = link.sourceTicketId === ticket.id;
                     const linkedTicket = isSource ? { ticketNo: link.targetTicketNo, title: link.targetTitle, id: link.targetTicketId } : { ticketNo: link.sourceTicketNo, title: link.sourceTitle, id: link.sourceTicketId };
                     return (
-                      <Link key={link.id} href={`/dashboard/core-tickets/${linkedTicket.ticketNo}`} className="flex items-center justify-between gap-3 rounded-lg border bg-slate-50 px-3 py-2 text-sm transition hover:border-blue-200 hover:bg-blue-50/40">
-                        <div className="flex items-center gap-2">
+                      <div key={link.id} className="flex items-center justify-between gap-3 rounded-lg border bg-slate-50 px-3 py-2 text-sm transition hover:border-blue-200 hover:bg-blue-50/40">
+                        <Link href={`/dashboard/core-tickets/${linkedTicket.ticketNo}`} className="flex min-w-0 flex-1 items-center gap-2">
                           <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">{formatStatus(link.linkType)}</Badge>
                           <span className="font-medium text-blue-700">{linkedTicket.ticketNo}</span>
                           <span className="text-slate-700">{linkedTicket.title}</span>
-                        </div>
-                        <ExternalLink className="h-4 w-4 text-slate-400" />
-                      </Link>
+                        </Link>
+                        <button type="button" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => removeLink(link.id)} disabled={deletingLinkId === link.id} aria-label="Remove link" title="Remove link">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
               ) : <p className="text-sm text-muted-foreground">No linked tickets.</p>}
               <div className="flex gap-2">
-                <Input placeholder="Enter ticket ID to link..." value={linkTargetId} onChange={(e) => setLinkTargetId(e.target.value)} />
+                <Input placeholder="Enter ticket number (e.g. SRS-CORE-002)" value={linkTargetId} onChange={(e) => setLinkTargetId(e.target.value)} />
                 <Select value={linkType} onValueChange={setLinkType}>
                   <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -750,6 +838,87 @@ export function CoreTicketDetailClient() {
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={isSavingDetails}><X className="h-4 w-4" />Cancel</Button>
             <Button className="bg-blue-600 text-white hover:bg-blue-700" onClick={saveDetails} disabled={isSavingDetails}><Save className="h-4 w-4" />{isSavingDetails ? "Saving..." : "Save Ticket"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={subTaskOpen} onOpenChange={(open) => { setSubTaskOpen(open); if (!open) { setSubTaskTitle(""); setSubTaskDesc(""); setSubTaskPriority(""); setSubTaskAttachments([{ url: "", label: "" }]); } }}>
+        <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Create Sub Task</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="mb-1">Priority</Label>
+                <Select value={subTaskPriority} onValueChange={setSubTaskPriority}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select priority" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                    <SelectItem value="BLOCKER">Blocker</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label required className="mb-1">Title</Label>
+              <Input placeholder="Enter sub task title" value={subTaskTitle} onChange={(e) => setSubTaskTitle(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label required className="mb-1">Description</Label>
+              <div className="w-full min-w-0">
+                <RichEditor value={subTaskDesc} onChange={setSubTaskDesc} placeholder="Describe the sub task..." compact />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="mb-1">Attachment Links</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setSubTaskAttachments((items) => [...items, { url: "", label: "" }])}>
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </div>
+              {subTaskAttachments.map((attachment, index) => (
+                <div key={index} className="grid gap-2 rounded-lg border bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_auto]">
+                  <Input placeholder="Paste link" value={attachment.url} onChange={(e) => setSubTaskAttachments((items) => items.map((item, i) => i === index ? { ...item, url: e.target.value } : item))} />
+                  <Input placeholder="Label" value={attachment.label} onChange={(e) => setSubTaskAttachments((items) => items.map((item, i) => i === index ? { ...item, label: e.target.value } : item))} />
+                  <Button type="button" variant="ghost" size="icon" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setSubTaskAttachments((items) => items.length === 1 ? [{ url: "", label: "" }] : items.filter((_, i) => i !== index))}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              if (!subTaskTitle.trim() || !subTaskDesc.trim()) { toast.error("Title and description are required"); return; }
+              setSubTaskSubmitting(true);
+              try {
+                const cleanAttachments = subTaskAttachments.filter((a) => a.url.trim());
+                const res = await fetch("/api/core-tickets", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    type: "SUBTASK",
+                    priority: subTaskPriority || null,
+                    title: subTaskTitle,
+                    description: subTaskDesc,
+                    parentTaskId: ticket.id,
+                    epicId: ticket.epicId,
+                    attachments: cleanAttachments,
+                  }),
+                });
+                const result = await res.json().catch(() => ({}));
+                if (!res.ok) { toast.error(result.message || "Failed to create"); return; }
+                toast.success("Sub Task created");
+                setSubTaskOpen(false);
+                setSubTaskTitle(""); setSubTaskDesc(""); setSubTaskPriority(""); setSubTaskAttachments([{ url: "", label: "" }]);
+                mutate();
+              } catch { toast.error("Unexpected error"); }
+              finally { setSubTaskSubmitting(false); }
+            }} disabled={subTaskSubmitting} className="bg-blue-500 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50">
+              {subTaskSubmitting ? "Creating..." : "Create Sub Task"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

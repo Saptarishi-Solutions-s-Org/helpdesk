@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { coreTicketAttachments, coreTickets, coreTicketActivity, coreTicketStatusHistory, modules, projects, users } from "@/db/schema";
 import { apiError, ok } from "@/lib/api";
@@ -29,8 +29,17 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const view = url.searchParams.get("view");
     const type = url.searchParams.get("type");
-    const filters: ReturnType<typeof eq>[] = [];
+    const filters: SQL[] = [];
     if (view === "open") filters.push(inArray(coreTickets.status, [...openDevStatuses]));
+    if (view === "assigned") {
+      filters.push(
+        or(
+          eq(coreTickets.assignedDeveloperId, session.id),
+          eq(coreTickets.assignedQaId, session.id),
+          eq(coreTickets.assignedAdminId, session.id),
+        )!,
+      );
+    }
     if (type) {
       if (type === "epic") filters.push(eq(coreTickets.type, "EPIC" as const));
       else if (type === "child") filters.push(inArray(coreTickets.type, [...childTypes]));
@@ -47,7 +56,9 @@ export async function GET(req: Request) {
         status: coreTickets.status,
         epicId: coreTickets.epicId,
         parentTaskId: coreTickets.parentTaskId,
+        projectId: coreTickets.projectId,
         projectName: projects.name,
+        moduleId: coreTickets.moduleId,
         moduleName: modules.name,
         developerName: developer.name,
         qaName: qa.name,
@@ -151,6 +162,7 @@ export async function POST(req: Request) {
         projectId: resolvedProjectId,
         moduleId: resolvedModuleId,
         status: isEpicType(type) ? "OPEN" : "NEW",
+        assignedAdminId: session.id,
         createdById: session.id,
       })
       .returning();
